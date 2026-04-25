@@ -246,6 +246,8 @@
             <input id="n-stock" type="number" min="0" placeholder="0" />
           </div>
         </div>
+        <label>Precio unitario ($)</label>
+        <input id="n-precio" type="number" min="0" step="0.01" placeholder="Ej: 45.00" />
         <button class="btn-primary" onclick="doAgregarInsumo()">+ Agregar insumo</button>
       </div>
       <div class="card">
@@ -262,19 +264,18 @@
 const API = "https://script.google.com/macros/s/AKfycbxCX0NGS6wt_ttzbEGd6vizXFtYFQCyc4LMTdTB4-6YalBFZnVh8aQuvbKpBVhhEBQC-w/exec";
 
 const USUARIOS = [
-  { id:"admin",  nombre:"Administrador", pin:"Admin", rol:"admin" },
-  { id:"cocina 1", nombre:"Aide",        pin:"cocina", rol:"cocina" },
+  { id:"admin",  nombre:"Administrador", pin:"1234", rol:"admin" },
+  { id:"carlos", nombre:"Carlos",        pin:"1111", rol:"cocina" },
   { id:"maria",  nombre:"María",         pin:"2222", rol:"cocina" },
-  { id:"prepracion",   nombre:"andres",          pin:"torta", rol:"cocina_venta" },
-  { id:"preparacion",    nombre:"cristofer",           pin:"torta", rol:"cocina_venta" },
+  { id:"jose",   nombre:"José",          pin:"3333", rol:"cocina_venta" },
+  { id:"ana",    nombre:"Ana",           pin:"4444", rol:"cocina_venta" },
 ];
 
 const INSUMOS_INIT = [
-  {id:1,nombre:"Aceite",unidad:"pieza",stock:5},
-  {id:2,nombre:"Harina",unidad:"kg",  stock:20},
-  {id:3,nombre:"Pollo", unidad:"kg",  stock:15},
-  {id:4,nombre:"Arroz", unidad:"kg",  stock:30},
-  {id:5,nombre:"Sal",   unidad:"kg",  stock:8},
+  {id:1,nombre:"Carne de cerdo",       unidad:"kg", stock:0, precio:0},
+  {id:2,nombre:"Carne de hamburguesa", unidad:"kg", stock:0, precio:0},
+  {id:3,nombre:"Aceite",               unidad:"L",  stock:0, precio:0},
+  {id:4,nombre:"Vinagre",              unidad:"L",  stock:0, precio:0},
 ];
 
 // ── ESTADO ────────────────────────────────────────────────────────
@@ -333,7 +334,8 @@ async function init(){
       apiGet("getInsumos"),
       apiGet("getMovimientos")
     ]);
-    insumos = (ins && ins.length) ? ins : INSUMOS_INIT;
+    // Asegura que todos los insumos tengan campo precio
+  insumos = (ins && ins.length) ? ins.map(i=>({...i, precio: i.precio||0})) : INSUMOS_INIT;
     movs    = (mov && mov.length) ? mov.reverse() : []; // más recientes primero
     // Si era la primera vez, guarda los insumos iniciales
     if (!ins || !ins.length) {
@@ -587,6 +589,8 @@ function renderInventario(){
       <div style="flex:1">
         <div style="font-weight:700;font-size:15px">${i.nombre}</div>
         <div style="font-size:12px;color:var(--muted)">${i.unidad}</div>
+        ${i.precio?`<div style="font-size:12px;color:var(--muted)">Precio: ${fmtMoney(i.precio)}/${i.unidad}</div>`:""}
+        ${i.precio&&i.stock?`<div style="font-size:12px;color:var(--blue)">Valor: ${fmtMoney(i.precio*i.stock)}</div>`:""}
       </div>
       <div style="text-align:right">
         <div style="font-weight:800;font-size:22px;color:${col}">${i.stock}</div>
@@ -666,7 +670,7 @@ async function doExcel(){
       Insumo:      m.insumoNombre, Cantidad: m.cantidad, Unidad: m.unidad,
       "Costo ($)": m.costo??"", Nota: m.nota||""
     }));
-    const dataStock = insumos.map(i=>({Insumo:i.nombre,Unidad:i.unidad,"Stock actual":i.stock}));
+    const dataStock = insumos.map(i=>({"Insumo":i.nombre,"Unidad":i.unidad,"Stock actual":i.stock,"Precio unitario ($)":i.precio||0,"Valor total ($)":+((i.precio||0)*(i.stock||0)).toFixed(2)}));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataMov),   "Movimientos");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataStock), "Stock actual");
@@ -679,12 +683,34 @@ async function doExcel(){
 function renderAdmin(){
   const div = el("del-list");
   div.innerHTML = insumos.map(i=>`
-    <div class="mov-row">
-      <div style="flex:1;font-weight:600">${i.nombre} <span style="color:var(--muted);font-weight:400">· ${i.stock} ${i.unidad}</span></div>
-      <div id="del-btns-${i.id}">
-        <button class="btn-danger" onclick="confirmDel(${i.id})">Eliminar</button>
+    <div class="mov-row" style="flex-wrap:wrap;gap:6px">
+      <div style="flex:1;min-width:120px">
+        <div style="font-weight:600">${i.nombre}</div>
+        <div style="font-size:12px;color:var(--muted)">${i.stock} ${i.unidad} · Precio: ${i.precio?fmtMoney(i.precio):"sin precio"}</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input id="precio-${i.id}" type="number" min="0" step="0.01" placeholder="Precio $"
+          value="${i.precio||""}"
+          style="width:100px;margin-bottom:0;padding:6px 8px;font-size:13px"
+          onkeydown="if(event.key==='Enter') actualizarPrecio(${i.id})" />
+        <button class="btn-sm" style="color:var(--green);border-color:var(--green)" onclick="actualizarPrecio(${i.id})">✓</button>
+        <div id="del-btns-${i.id}">
+          <button class="btn-danger" onclick="confirmDel(${i.id})">Eliminar</button>
+        </div>
       </div>
     </div>`).join("");
+}
+
+async function actualizarPrecio(id){
+  const val = Number(el("precio-"+id).value)||0;
+  insumos = insumos.map(i=> i.id===id ? {...i, precio:val} : i);
+  setSaving(true);
+  try {
+    await apiPost({action:"saveInsumos", data:insumos});
+    notify("✓ Precio actualizado");
+  } catch { notify("Error guardando",false); }
+  setSaving(false);
+  renderAdmin();
 }
 
 function confirmDel(id){
@@ -718,7 +744,7 @@ async function doEliminar(id){
 async function doAgregarInsumo(){
   const nombre = el("n-nombre").value.trim();
   if(!nombre){ notify("Escribe el nombre",false); return; }
-  const nuevo = {id:Date.now(), nombre, unidad:el("n-unidad").value, stock:Number(el("n-stock").value)||0};
+  const nuevo = {id:Date.now(), nombre, unidad:el("n-unidad").value, stock:Number(el("n-stock").value)||0, precio:Number(el("n-precio").value)||0};
   insumos = [...insumos, nuevo];
   setSaving(true);
   try {
@@ -726,7 +752,7 @@ async function doAgregarInsumo(){
     notify(`✓ "${nombre}" agregado`);
   } catch { notify("Error guardando",false); }
   setSaving(false);
-  el("n-nombre").value=""; el("n-stock").value="";
+  el("n-nombre").value=""; el("n-stock").value=""; el("n-precio").value="";
   populateInsumoSelects();
   renderAdmin();
 }
