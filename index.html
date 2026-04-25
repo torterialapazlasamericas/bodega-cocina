@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bodega Cocina</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --hi:       #21262d;
+      --border:   #30363d;
+      --orange:   #f97316;
+      --orangeD:  #7c2d12;
+      --green:    #22c55e;
+      --greenD:   #14532d;
+      --red:      #ef4444;
+      --redD:     #7f1d1d;
+      --blue:     #3b82f6;
+      --blueD:    #1e3a5f;
+      --text:     #e6edf3;
+      --muted:    #8b949e;
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'Georgia', serif; min-height: 100vh; padding-bottom: 60px; }
+
+    /* UTILS */
+    .hidden { display: none !important; }
+    input, select, button { font-family: 'Georgia', serif; }
+    input, select {
+      width: 100%; background: var(--hi); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 11px; color: var(--text);
+      font-size: 15px; margin-bottom: 13px; outline: none;
+    }
+    label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; display: block; }
+    .btn-primary {
+      width: 100%; padding: 12px 0; background: var(--orange); border: none;
+      border-radius: 10px; color: #fff; font-weight: 700; font-size: 15px; cursor: pointer;
+    }
+    .btn-sm { padding: 6px 13px; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); font-size: 13px; cursor: pointer; }
+    .btn-danger { padding: 6px 12px; background: var(--redD); border: 1px solid var(--red); border-radius: 8px; color: var(--red); font-size: 13px; cursor: pointer; }
+    .btn-green  { padding: 7px 14px; background: transparent; border: 1px solid var(--green); border-radius: 8px; color: var(--green); font-size: 13px; cursor: pointer; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px 18px; margin-bottom: 14px; }
+    .card-title { font-size: 17px; font-weight: 700; margin-bottom: 16px; }
+    .mov-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .mov-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+    .row2 { display: flex; gap: 10px; }
+    .row2 > * { flex: 1; }
+
+    /* TOAST */
+    #toast {
+      position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+      padding: 11px 22px; border-radius: 10px; font-weight: 600; font-size: 14px;
+      z-index: 999; box-shadow: 0 8px 30px #00000060; white-space: nowrap;
+      color: #fff; display: none;
+    }
+
+    /* SPINNER */
+    #spinner {
+      position: fixed; inset: 0; background: #0d1117ee;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 14px; z-index: 990;
+    }
+    .spin { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--orange); border-radius: 50%; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* LOGIN */
+    #login { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 38px 26px; width: 100%; max-width: 370px; box-shadow: 0 24px 80px #00000090; }
+    .login-logo { font-size: 46px; text-align: center; margin-bottom: 6px; }
+    .login-title { font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+    .login-sub { font-size: 13px; color: var(--muted); text-align: center; margin-bottom: 26px; }
+    .user-btn {
+      display: flex; align-items: center; gap: 12px; width: 100%;
+      padding: 10px 14px; background: transparent; border: 1px solid var(--border);
+      border-radius: 10px; cursor: pointer; color: var(--text); text-align: left; margin-bottom: 8px;
+      transition: all .15s;
+    }
+    .user-btn.active { background: var(--hi); border-color: var(--orange); }
+    .avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
+    .pin-input { font-size: 20px; letter-spacing: 8px; font-family: monospace; }
+    .pin-error { color: var(--red); font-size: 13px; margin-bottom: 10px; }
+
+    /* HEADER */
+    header {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 12px 16px; display: flex; align-items: center; gap: 10px;
+      position: sticky; top: 0; z-index: 10;
+    }
+    .rol-badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+    .saving-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); display: inline-block; margin-left: 7px; animation: pulse 1s infinite; }
+
+    /* NAV */
+    nav { display: flex; gap: 4px; padding: 10px 14px; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; }
+    .nav-btn { padding: 8px 14px; border-radius: 8px; border: none; background: transparent; color: var(--muted); font-size: 13px; cursor: pointer; white-space: nowrap; }
+    .nav-btn.active { background: var(--orange); color: #fff; font-weight: 700; }
+
+    /* MAIN */
+    main { padding: 16px 14px; max-width: 520px; margin: 0 auto; }
+
+    /* TYPE BUTTONS */
+    .type-row { display: flex; gap: 8px; margin-bottom: 14px; }
+    .type-btn { flex: 1; padding: 11px 0; border-radius: 10px; border: 2px solid var(--border); background: transparent; color: var(--muted); font-weight: 700; font-size: 13px; cursor: pointer; }
+    .type-btn.entrada.active { border-color: var(--green); background: #22c55e22; color: var(--green); }
+    .type-btn.uso.active     { border-color: var(--red);   background: #ef444422; color: var(--red); }
+
+    /* STOCK BADGE */
+    .stock-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+    .stock-ok  { background: var(--greenD); color: var(--green); }
+    .stock-low { background: var(--redD);   color: var(--red); }
+
+    /* INSUMO ROW */
+    .insumo-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--hi); border-radius: 10px; border: 1px solid var(--border); margin-bottom: 8px; }
+
+    /* RESUMEN CARDS */
+    .resumen { display: flex; gap: 8px; margin-bottom: 14px; }
+    .resumen-card { flex: 1; background: var(--hi); border-radius: 10px; padding: 10px 12px; text-align: center; }
+    .resumen-num { font-size: 20px; font-weight: 800; }
+    .resumen-lbl { font-size: 11px; color: var(--muted); }
+  </style>
+</head>
+<body>
+
+<!-- SPINNER -->
+<div id="spinner">
+  <div style="font-size:40px">🍳</div>
+  <div class="spin"></div>
+  <div style="color:var(--muted);font-size:14px">Cargando bodega…</div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- LOGIN -->
+<div id="login" class="hidden">
+  <div class="login-card">
+    <div class="login-logo">🍳</div>
+    <div class="login-title">Bodega Cocina</div>
+    <div class="login-sub">Selecciona tu perfil e ingresa tu PIN</div>
+    <div id="user-list"></div>
+    <div id="pin-section" class="hidden">
+      <label>PIN de acceso</label>
+      <input id="pin-input" class="pin-input" type="password" maxlength="6" placeholder="••••" />
+      <div id="pin-error" class="pin-error hidden">PIN incorrecto</div>
+      <button class="btn-primary" onclick="doLogin()">Entrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden">
+  <header>
+    <div style="font-size:20px">🍳</div>
+    <div style="font-weight:700;font-size:16px;flex:1">
+      Bodega
+      <span id="saving-dot" class="saving-dot hidden"></span>
+    </div>
+    <span id="header-badge" class="rol-badge"></span>
+    <span id="header-name" style="font-size:13px;color:var(--muted);margin-left:6px"></span>
+    <button class="btn-sm" onclick="doLogout()">Salir</button>
+  </header>
+
+  <nav id="nav"></nav>
+
+  <main>
+    <!-- REGISTRAR -->
+    <div id="view-registrar" class="hidden">
+      <div class="card">
+        <div class="card-title">Nuevo movimiento</div>
+        <div id="type-row" class="type-row">
+          <button class="type-btn entrada active" onclick="setTipo('entrada')">📥 Entrada a bodega</button>
+          <button class="type-btn uso"            onclick="setTipo('uso')">📤 Uso en cocina</button>
+        </div>
+        <div id="tipo-venta-label" class="hidden" style="padding:9px 14px;border-radius:10px;background:var(--blueD);color:var(--blue);font-weight:700;font-size:13px;text-align:center;margin-bottom:14px">
+          📤 Registrar uso en cocina
+        </div>
+        <label>Insumo</label>
+        <select id="f-insumo" onchange="onInsumoChange()">
+          <option value="">— Selecciona —</option>
+        </select>
+        <div id="stock-badge" class="hidden stock-badge"></div>
+        <label id="f-cant-label">Cantidad</label>
+        <input id="f-cant" type="number" min="0.01" step="0.01" placeholder="Ej: 5" />
+        <div id="costo-section">
+          <label>Costo total (opcional, $)</label>
+          <input id="f-costo" type="number" min="0" step="0.01" placeholder="Ej: 25.00" />
+        </div>
+        <label>Nota (opcional)</label>
+        <input id="f-nota" type="text" placeholder="Ej: Compra proveedor ABC" />
+        <button class="btn-primary" onclick="doRegistrar()">📥 Registrar entrada</button>
+        <div id="ultimos" style="margin-top:20px"></div>
+      </div>
+    </div>
+
+    <!-- INVENTARIO -->
+    <div id="view-inventario" class="hidden">
+      <div class="card">
+        <div class="card-title">Stock actual en bodega</div>
+        <div id="inv-list"></div>
+      </div>
+    </div>
+
+    <!-- HISTORIAL -->
+    <div id="view-historial" class="hidden">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div class="card-title" style="margin-bottom:0">Historial</div>
+          <button id="btn-excel" class="btn-green hidden" onclick="doExcel()">⬇ Excel</button>
+        </div>
+        <div class="row2">
+          <div><label>Insumo</label><select id="h-insumo" onchange="renderHistorial()"><option value="">Todos</option></select></div>
+          <div><label>Tipo</label>
+            <select id="h-tipo" onchange="renderHistorial()">
+              <option value="">Todos</option>
+              <option value="entrada">Entrada</option>
+              <option value="uso">Uso</option>
+            </select>
+          </div>
+        </div>
+        <div class="row2">
+          <div><label>Desde</label><input id="h-desde" type="date" oninput="renderHistorial()" style="margin-bottom:10px" /></div>
+          <div><label>Hasta</label><input id="h-hasta" type="date" oninput="renderHistorial()" style="margin-bottom:10px" /></div>
+        </div>
+        <div id="h-resumen" class="hidden resumen"></div>
+        <div id="h-list"></div>
+      </div>
+    </div>
+
+    <!-- GESTIÓN ADMIN -->
+    <div id="view-admin" class="hidden">
+      <div class="card">
+        <div class="card-title">Agregar nuevo insumo</div>
+        <label>Nombre</label>
+        <input id="n-nombre" placeholder="Ej: Tomate" />
+        <div class="row2">
+          <div>
+            <label>Unidad</label>
+            <select id="n-unidad">
+              <option>kg</option><option>g</option><option>L</option><option>ml</option>
+              <option>bote</option><option>caja</option><option>bolsa</option><option>unidad</option><option>docena</option>
+            </select>
+          </div>
+          <div>
+            <label>Stock inicial</label>
+            <input id="n-stock" type="number" min="0" placeholder="0" />
+          </div>
+        </div>
+        <button class="btn-primary" onclick="doAgregarInsumo()">+ Agregar insumo</button>
+      </div>
+      <div class="card">
+        <div class="card-title">Eliminar insumos</div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Solo el administrador puede eliminar insumos.</p>
+        <div id="del-list"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ── CONFIG ────────────────────────────────────────────────────────
+const API = "https://script.google.com/macros/s/AKfycbxCX0NGS6wt_ttzbEGd6vizXFtYFQCyc4LMTdTB4-6YalBFZnVh8aQuvbKpBVhhEBQC-w/exec";
+
+const USUARIOS = [
+  { id:"admin",  nombre:"Administrador", pin:"1234", rol:"admin" },
+  { id:"carlos", nombre:"Carlos",        pin:"1111", rol:"cocina" },
+  { id:"maria",  nombre:"María",         pin:"2222", rol:"cocina" },
+  { id:"jose",   nombre:"José",          pin:"3333", rol:"cocina_venta" },
+  { id:"ana",    nombre:"Ana",           pin:"4444", rol:"cocina_venta" },
+];
+
+const INSUMOS_INIT = [
+  {id:1,nombre:"Aceite",unidad:"bote",stock:5},
+  {id:2,nombre:"Harina",unidad:"kg",  stock:20},
+  {id:3,nombre:"Pollo", unidad:"kg",  stock:15},
+  {id:4,nombre:"Arroz", unidad:"kg",  stock:30},
+  {id:5,nombre:"Sal",   unidad:"kg",  stock:8},
+];
+
+// ── ESTADO ────────────────────────────────────────────────────────
+let usuario   = null;
+let insumos   = [];
+let movs      = [];
+let tipoActual = "entrada";
+let selUser   = null;
+let delConfirm = null;
+
+// ── HELPERS ───────────────────────────────────────────────────────
+const fmtDate  = d => new Date(d).toLocaleDateString("es-ES");
+const fmtTime  = d => new Date(d).toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"});
+const fmtMoney = n => "$"+Number(n).toLocaleString("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+const rolColor = r => r==="admin"?"var(--orange)":r==="cocina"?"var(--green)":"var(--blue)";
+const rolBg    = r => r==="admin"?"var(--orangeD)":r==="cocina"?"var(--greenD)":"var(--blueD)";
+const rolEmoji = r => r==="admin"?"👑":r==="cocina"?"👨‍🍳":"🛒";
+const rolLabel = r => r==="admin"?"Administrador":r==="cocina"?"Cocina":"Cocina Venta";
+
+function show(id){ document.getElementById(id).classList.remove("hidden"); }
+function hide(id){ document.getElementById(id).classList.add("hidden"); }
+function el(id)  { return document.getElementById(id); }
+
+function notify(msg, ok=true){
+  const t = el("toast");
+  t.textContent = msg;
+  t.style.background = ok ? "var(--green)" : "var(--red)";
+  t.style.display = "block";
+  setTimeout(()=>{ t.style.display="none"; }, 2800);
+}
+
+function setSaving(v){
+  v ? show("saving-dot") : hide("saving-dot");
+}
+
+// ── API CALLS ─────────────────────────────────────────────────────
+async function apiGet(action){
+  const r = await fetch(`${API}?action=${action}`);
+  return r.json();
+}
+
+async function apiPost(body){
+  const r = await fetch(API,{
+    method:"POST",
+    body: JSON.stringify(body)
+  });
+  return r.json();
+}
+
+// ── INIT ──────────────────────────────────────────────────────────
+async function init(){
+  show("spinner");
+  try {
+    const [ins, mov] = await Promise.all([
+      apiGet("getInsumos"),
+      apiGet("getMovimientos")
+    ]);
+    insumos = (ins && ins.length) ? ins : INSUMOS_INIT;
+    movs    = (mov && mov.length) ? mov.reverse() : []; // más recientes primero
+    // Si era la primera vez, guarda los insumos iniciales
+    if (!ins || !ins.length) {
+      await apiPost({action:"saveInsumos", data: insumos});
+    }
+  } catch(e){
+    insumos = INSUMOS_INIT;
+    movs = [];
+  }
+  hide("spinner");
+  renderLogin();
+  show("login");
+}
+
+// ── LOGIN ─────────────────────────────────────────────────────────
+function renderLogin(){
+  const list = el("user-list");
+  list.innerHTML = "";
+  USUARIOS.forEach(u=>{
+    const btn = document.createElement("button");
+    btn.className = "user-btn" + (selUser?.id===u.id?" active":"");
+    btn.innerHTML = `
+      <div class="avatar" style="background:${rolBg(u.rol)}">${rolEmoji(u.rol)}</div>
+      <div>
+        <div style="font-weight:600;font-size:14px">${u.nombre}</div>
+        <div style="font-size:12px;color:${rolColor(u.rol)}">${rolLabel(u.rol)}</div>
+      </div>`;
+    btn.onclick = ()=>{
+      selUser = u;
+      hide("pin-error");
+      el("pin-input").value = "";
+      renderLogin();
+      show("pin-section");
+      el("pin-input").focus();
+    };
+    list.appendChild(btn);
+  });
+}
+
+el("pin-input").addEventListener("keydown", e=>{ if(e.key==="Enter") doLogin(); });
+
+function doLogin(){
+  if(!selUser) return;
+  if(el("pin-input").value === selUser.pin){
+    usuario = selUser;
+    if(usuario.rol==="cocina_venta") tipoActual="uso";
+    else tipoActual="entrada";
+    hide("login");
+    hide("pin-error");
+    renderApp();
+    show("app");
+    setView("registrar");
+  } else {
+    show("pin-error");
+    el("pin-input").value="";
+  }
+}
+
+function doLogout(){
+  usuario=null; selUser=null;
+  el("pin-input").value="";
+  hide("app"); hide("pin-section"); hide("pin-error");
+  renderLogin();
+  show("login");
+}
+
+// ── APP ───────────────────────────────────────────────────────────
+function renderApp(){
+  // Header
+  const badge = el("header-badge");
+  badge.textContent  = rolLabel(usuario.rol);
+  badge.style.background = rolBg(usuario.rol);
+  badge.style.color      = rolColor(usuario.rol);
+  el("header-name").textContent = usuario.nombre;
+
+  // Nav
+  const navItems = [
+    {key:"registrar",  label:"📝 Registrar"},
+    {key:"inventario", label:"📦 Inventario"},
+    {key:"historial",  label:"📊 Historial"},
+    ...(usuario.rol==="admin"?[{key:"admin",label:"⚙️ Gestión"}]:[]),
+  ];
+  const nav = el("nav");
+  nav.innerHTML="";
+  navItems.forEach(({key,label})=>{
+    const b = document.createElement("button");
+    b.className="nav-btn"; b.textContent=label;
+    b.onclick=()=>setView(key);
+    b.id="nav-"+key;
+    nav.appendChild(b);
+  });
+
+  // Excel btn solo admin
+  usuario.rol==="admin" ? show("btn-excel") : hide("btn-excel");
+
+  // Tipo buttons
+  const puedeEntrada = usuario.rol==="admin"||usuario.rol==="cocina";
+  if(puedeEntrada){
+    show("type-row"); hide("tipo-venta-label"); show("costo-section");
+  } else {
+    hide("type-row"); show("tipo-venta-label"); hide("costo-section");
+  }
+  setTipo(tipoActual);
+
+  // Poblar selects de insumo
+  populateInsumoSelects();
+}
+
+function setView(key){
+  ["registrar","inventario","historial","admin"].forEach(v=>{
+    const el2 = el("view-"+v);
+    if(el2) el2.classList.add("hidden");
+    const nb = el("nav-"+v);
+    if(nb) nb.classList.remove("active");
+  });
+  show("view-"+key);
+  const nb = el("nav-"+key);
+  if(nb) nb.classList.add("active");
+
+  if(key==="registrar")  renderUltimos();
+  if(key==="inventario") renderInventario();
+  if(key==="historial")  renderHistorial();
+  if(key==="admin")      renderAdmin();
+}
+
+function setTipo(t){
+  tipoActual=t;
+  el("type-row").querySelectorAll(".type-btn").forEach(b=>{
+    b.classList.remove("active");
+    if(b.classList.contains(t)) b.classList.add("active");
+  });
+  const puedeEntrada = usuario.rol==="admin"||usuario.rol==="cocina";
+  if(puedeEntrada){
+    t==="entrada" ? show("costo-section") : hide("costo-section");
+  }
+  el("f-nota").placeholder = t==="entrada"?"Ej: Compra proveedor ABC":"Ej: Para sopa del almuerzo";
+  const btn = document.querySelector("#view-registrar .btn-primary");
+  if(btn) btn.textContent = t==="entrada"?"📥 Registrar entrada":"📤 Registrar uso";
+  onInsumoChange();
+}
+
+function populateInsumoSelects(){
+  ["f-insumo","h-insumo"].forEach(sid=>{
+    const s = el(sid);
+    const cur = s.value;
+    s.innerHTML = '<option value="">— Selecciona —</option>';
+    if(sid==="h-insumo") s.innerHTML='<option value="">Todos</option>';
+    insumos.forEach(i=>{
+      const o=document.createElement("option");
+      o.value=i.id; o.textContent=i.nombre+(sid==="f-insumo"?` · Stock: ${i.stock} ${i.unidad}`:"");
+      s.appendChild(o);
+    });
+    s.value=cur;
+  });
+}
+
+function onInsumoChange(){
+  const id = Number(el("f-insumo").value);
+  const ins = insumos.find(i=>i.id===id);
+  const badge = el("stock-badge");
+  if(ins){
+    badge.textContent = `Stock: ${ins.stock} ${ins.unidad}${ins.stock<3?" ⚠ Bajo":""}`;
+    badge.className   = "stock-badge "+(ins.stock<3?"stock-low":"stock-ok");
+    show("stock-badge");
+    el("f-cant-label").textContent = `Cantidad (${ins.unidad})`;
+  } else {
+    hide("stock-badge");
+    el("f-cant-label").textContent = "Cantidad";
+  }
+}
+
+// ── REGISTRAR ─────────────────────────────────────────────────────
+async function doRegistrar(){
+  const id   = Number(el("f-insumo").value);
+  const cant = Number(el("f-cant").value);
+  const costo= el("f-costo").value ? Number(el("f-costo").value) : null;
+  const nota = el("f-nota").value.trim();
+
+  if(!id||!cant||cant<=0){ notify("Completa insumo y cantidad",false); return; }
+  const ins = insumos.find(i=>i.id===id);
+  if(tipoActual==="uso"&&cant>ins.stock){ notify(`Solo quedan ${ins.stock} ${ins.unidad}`,false); return; }
+
+  setSaving(true);
+  const now = new Date();
+  const mov = {
+    id: Date.now(), tipo: tipoActual,
+    fecha: fmtDate(now), hora: fmtTime(now), timestamp: now.toISOString(),
+    usuario: usuario.nombre, rol: usuario.rol,
+    insumoId: ins.id, insumoNombre: ins.nombre, unidad: ins.unidad,
+    cantidad: cant, costo, nota
+  };
+
+  // Actualiza stock local
+  insumos = insumos.map(i=> i.id===ins.id
+    ? {...i, stock: +(tipoActual==="entrada"?i.stock+cant:i.stock-cant).toFixed(3)}
+    : i);
+  movs = [mov, ...movs];
+
+  // Guarda en Sheets
+  try {
+    await Promise.all([
+      apiPost({action:"saveInsumos",   data: insumos}),
+      apiPost({action:"addMovimiento", data: mov})
+    ]);
+    notify(tipoActual==="entrada"?`✓ +${cant} ${ins.unidad} de ${ins.nombre}`:`✓ -${cant} ${ins.unidad} de ${ins.nombre}`);
+  } catch {
+    notify("Error guardando en Sheets",false);
+  }
+
+  setSaving(false);
+  el("f-insumo").value=""; el("f-cant").value="";
+  el("f-costo").value="";  el("f-nota").value="";
+  hide("stock-badge");
+  populateInsumoSelects();
+  renderUltimos();
+}
+
+// ── ÚLTIMOS MOVS ──────────────────────────────────────────────────
+function renderUltimos(){
+  const div = el("ultimos");
+  if(!movs.length){ div.innerHTML=""; return; }
+  let html=`<label style="margin-bottom:8px">Últimos movimientos</label>`;
+  movs.slice(0,5).forEach(m=>{
+    const bg = m.tipo==="entrada"?"var(--greenD)":"var(--redD)";
+    const col= m.tipo==="entrada"?"var(--green)":"var(--red)";
+    html+=`<div class="mov-row">
+      <div class="mov-icon" style="background:${bg}">${m.tipo==="entrada"?"📥":"📤"}</div>
+      <div style="flex:1">
+        <div style="font-weight:600">${m.insumoNombre}</div>
+        <div style="font-size:12px;color:var(--muted)">${m.fecha} · ${m.hora} · ${m.usuario}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-weight:700;color:${col}">${m.tipo==="entrada"?"+":"-"}${m.cantidad} ${m.unidad}</div>
+        ${m.costo?`<div style="font-size:12px;color:var(--muted)">${fmtMoney(m.costo)}</div>`:""}
+      </div>
+    </div>`;
+  });
+  div.innerHTML=html;
+}
+
+// ── INVENTARIO ────────────────────────────────────────────────────
+function renderInventario(){
+  const div = el("inv-list");
+  if(!insumos.length){ div.innerHTML=`<div style="color:var(--muted);text-align:center;padding:20px 0">No hay insumos</div>`; return; }
+  div.innerHTML = insumos.map(i=>{
+    const low=i.stock<3;
+    const col=low?"var(--red)":"var(--green)";
+    const bl =low?"var(--red)":"var(--green)";
+    return `<div class="insumo-row" style="border-left:4px solid ${bl}">
+      <div style="font-size:24px">🫙</div>
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:15px">${i.nombre}</div>
+        <div style="font-size:12px;color:var(--muted)">${i.unidad}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-weight:800;font-size:22px;color:${col}">${i.stock}</div>
+        <div style="font-size:12px;color:var(--muted)">${i.unidad}</div>
+        ${low?`<div style="font-size:11px;color:var(--red);font-weight:600">⚠ Bajo</div>`:""}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+// ── HISTORIAL ─────────────────────────────────────────────────────
+function getMovFiltrados(){
+  const hInsumo = el("h-insumo").value;
+  const hTipo   = el("h-tipo").value;
+  const hDesde  = el("h-desde").value;
+  const hHasta  = el("h-hasta").value;
+  return movs.filter(m=>{
+    if(hInsumo && String(m.insumoId)!==hInsumo) return false;
+    if(hTipo   && m.tipo!==hTipo) return false;
+    if(hDesde  && new Date(m.timestamp)<new Date(hDesde)) return false;
+    if(hHasta){ const h=new Date(hHasta); h.setHours(23,59,59); if(new Date(m.timestamp)>h) return false; }
+    return true;
+  });
+}
+
+function renderHistorial(){
+  const filtrados = getMovFiltrados();
+  const resumen   = el("h-resumen");
+  const list      = el("h-list");
+
+  if(filtrados.length){
+    const entradas = filtrados.filter(m=>m.tipo==="entrada").reduce((a,m)=>a+m.cantidad,0);
+    const usos     = filtrados.filter(m=>m.tipo==="uso").reduce((a,m)=>a+m.cantidad,0);
+    const costo    = filtrados.filter(m=>m.tipo==="entrada"&&m.costo).reduce((a,m)=>a+m.costo,0);
+    let html=`
+      <div class="resumen-card"><div class="resumen-num" style="color:var(--green)">${entradas.toFixed(1)}</div><div class="resumen-lbl">Entradas</div></div>
+      <div class="resumen-card"><div class="resumen-num" style="color:var(--red)">${usos.toFixed(1)}</div><div class="resumen-lbl">Usos</div></div>`;
+    if(costo>0) html+=`<div class="resumen-card"><div class="resumen-num" style="color:var(--blue);font-size:16px">${fmtMoney(costo)}</div><div class="resumen-lbl">Costo</div></div>`;
+    resumen.innerHTML=html;
+    show("h-resumen");
+  } else {
+    hide("h-resumen");
+  }
+
+  if(!filtrados.length){
+    list.innerHTML=`<div style="text-align:center;color:var(--muted);padding:26px 0">No hay movimientos con estos filtros</div>`;
+    return;
+  }
+  list.innerHTML = filtrados.map(m=>{
+    const bg  = m.tipo==="entrada"?"var(--greenD)":"var(--redD)";
+    const col = m.tipo==="entrada"?"var(--green)":"var(--red)";
+    return `<div class="mov-row">
+      <div class="mov-icon" style="background:${bg}">${m.tipo==="entrada"?"📥":"📤"}</div>
+      <div style="flex:1">
+        <div style="font-weight:600">${m.insumoNombre}</div>
+        <div style="font-size:12px;color:var(--muted)">${m.fecha} ${m.hora} · ${m.usuario}</div>
+        ${m.nota?`<div style="font-size:12px;color:var(--muted);font-style:italic">${m.nota}</div>`:""}
+      </div>
+      <div style="text-align:right">
+        <div style="font-weight:700;color:${col}">${m.tipo==="entrada"?"+":"-"}${m.cantidad} ${m.unidad}</div>
+        ${m.costo?`<div style="font-size:12px;color:var(--muted)">${fmtMoney(m.costo)}</div>`:""}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+// ── EXCEL ─────────────────────────────────────────────────────────
+async function doExcel(){
+  const filtrados = getMovFiltrados();
+  if(!filtrados.length){ notify("No hay datos para exportar",false); return; }
+  try {
+    const XLSX = await import("https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs");
+    const dataMov = filtrados.map(m=>({
+      Tipo:        m.tipo==="entrada"?"Entrada":"Uso en cocina",
+      Fecha:       m.fecha, Hora: m.hora,
+      Usuario:     m.usuario, Perfil: rolLabel(m.rol),
+      Insumo:      m.insumoNombre, Cantidad: m.cantidad, Unidad: m.unidad,
+      "Costo ($)": m.costo??"", Nota: m.nota||""
+    }));
+    const dataStock = insumos.map(i=>({Insumo:i.nombre,Unidad:i.unidad,"Stock actual":i.stock}));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataMov),   "Movimientos");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataStock), "Stock actual");
+    XLSX.writeFile(wb, `bodega_${new Date().toLocaleDateString("es-ES").replace(/\//g,"-")}.xlsx`);
+    notify("✓ Excel descargado (2 hojas)");
+  } catch { notify("Error al exportar",false); }
+}
+
+// ── ADMIN ─────────────────────────────────────────────────────────
+function renderAdmin(){
+  const div = el("del-list");
+  div.innerHTML = insumos.map(i=>`
+    <div class="mov-row">
+      <div style="flex:1;font-weight:600">${i.nombre} <span style="color:var(--muted);font-weight:400">· ${i.stock} ${i.unidad}</span></div>
+      <div id="del-btns-${i.id}">
+        <button class="btn-danger" onclick="confirmDel(${i.id})">Eliminar</button>
+      </div>
+    </div>`).join("");
+}
+
+function confirmDel(id){
+  if(delConfirm===id){
+    doEliminar(id);
+  } else {
+    delConfirm=id;
+    el("del-btns-"+id).innerHTML=`
+      <button class="btn-danger" onclick="doEliminar(${id})">Confirmar</button>
+      <button class="btn-sm" onclick="cancelDel(${id})" style="margin-left:6px">Cancelar</button>`;
+  }
+}
+function cancelDel(id){
+  delConfirm=null;
+  el("del-btns-"+id).innerHTML=`<button class="btn-danger" onclick="confirmDel(${id})">Eliminar</button>`;
+}
+
+async function doEliminar(id){
+  setSaving(true);
+  insumos = insumos.filter(i=>i.id!==id);
+  try {
+    await apiPost({action:"eliminarInsumo", id});
+    notify("Insumo eliminado");
+  } catch { notify("Error eliminando",false); }
+  setSaving(false);
+  delConfirm=null;
+  populateInsumoSelects();
+  renderAdmin();
+}
+
+async function doAgregarInsumo(){
+  const nombre = el("n-nombre").value.trim();
+  if(!nombre){ notify("Escribe el nombre",false); return; }
+  const nuevo = {id:Date.now(), nombre, unidad:el("n-unidad").value, stock:Number(el("n-stock").value)||0};
+  insumos = [...insumos, nuevo];
+  setSaving(true);
+  try {
+    await apiPost({action:"saveInsumos", data:insumos});
+    notify(`✓ "${nombre}" agregado`);
+  } catch { notify("Error guardando",false); }
+  setSaving(false);
+  el("n-nombre").value=""; el("n-stock").value="";
+  populateInsumoSelects();
+  renderAdmin();
+}
+
+// ── ARRANCAR ──────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
