@@ -247,8 +247,11 @@
           <div>
             <label>Unidad</label>
             <select id="n-unidad">
-              <option>kg</option><option>g</option><option>L</option><option>ml</option>
-              <option>bote</option><option>caja</option><option>bolsa</option><option>unidad</option><option>docena</option>
+              <option value="kg">Kilogramos (kg)</option>
+              <option value="pieza">Pieza</option>
+              <option value="caja">Caja</option>
+              <option value="paquete">Paquete</option>
+              <option value="lt">Litros (lt)</option>
             </select>
           </div>
           <div>
@@ -282,14 +285,14 @@
 
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────
-const API = "https://script.google.com/macros/s/AKfycbwUyeTfl3Ij3aQF5mqap7-NwnElr95GZud0hMxosaf5MumKVT0OZ3M-7DdTjDKEqXEwCg/exec";
+const API = "https://script.google.com/macros/s/AKfycbyESm8sPUIscQgObYXfZ-5DHnRzxKg2WgamB3erm1l-pMJ8FftciLigO_uGj4ysMNiEUw/exec";
 
 const USUARIOS = [
-  { id:"admin",  nombre:"Administrador", pin:"4530", rol:"admin" },
-  { id:"aide", nombre:"AIDE",        pin:"1968", rol:"cocina" },
-  { id:"toni",  nombre:"TONI",         pin:"1968", rol:"cocina_venta" },
-  { id:"andres",   nombre:"ANDRES",          pin:"1968", rol:"cocina_venta" },
-  { id:"cristofer",    nombre:"CRISTOFER",           pin:"1968", rol:"cocina_venta" },
+  { id:"admin",  nombre:"Administrador", pin:"1234", rol:"admin" },
+  { id:"carlos", nombre:"Carlos",        pin:"1111", rol:"cocina" },
+  { id:"maria",  nombre:"María",         pin:"2222", rol:"cocina" },
+  { id:"jose",   nombre:"José",          pin:"3333", rol:"cocina_venta" },
+  { id:"ana",    nombre:"Ana",           pin:"4444", rol:"cocina_venta" },
 ];
 
 const INSUMOS_INIT = [
@@ -613,14 +616,45 @@ function onInsumoChange(){
 
 // ── REGISTRAR ─────────────────────────────────────────────────────
 async function doRegistrar(){
-  const id   = Number(el("f-insumo").value);
-  const cant = Number(el("f-cant").value);
-  const costo= el("f-costo").value ? Number(el("f-costo").value) : null;
-  const nota = el("f-nota").value.trim();
+  const id        = Number(el("f-insumo").value);
+  const cantInput = Number(el("f-cant").value);
+  const costo     = el("f-costo").value ? Number(el("f-costo").value) : null;
+  const nota      = el("f-nota").value.trim();
 
-  if(!id||!cant||cant<=0){ notify("Completa insumo y cantidad",false); return; }
+  if(!id||!cantInput||cantInput<=0){ notify("Completa insumo y cantidad",false); return; }
   const ins = insumos.find(i=>i.id===id);
-  if(tipoActual==="uso"&&cant>ins.stock){ notify(`Solo quedan ${ins.stock} ${ins.unidad}`,false); return; }
+  const ppu = ins.piezasPorUnidad||0;
+
+  // Calcular delta en unidades internas (piezas si ppu>0, unidades si ppu==0)
+  let delta      = cantInput;
+  let unidMov    = ins.unidad;
+  let cantMov    = cantInput;
+
+  if(ppu > 0){
+    if(tipoActual === "entrada"){
+      delta   = cantInput * ppu;  // entrada en cajas → guardamos en piezas
+      unidMov = ins.unidad;
+      cantMov = cantInput;
+    } else {
+      // uso: depende si es por pieza o por unidad completa
+      if(usoTipo === "pieza"){
+        delta   = cantInput;        // ya son piezas
+        unidMov = "pieza";
+        cantMov = cantInput;
+      } else {
+        delta   = cantInput * ppu;  // cajas completas → piezas
+        unidMov = ins.unidad;
+        cantMov = cantInput;
+      }
+    }
+  }
+
+  // Validar stock
+  if(tipoActual==="uso" && delta > ins.stock){
+    const si = stockInfo(ins);
+    notify(`Stock insuficiente. Quedan: ${ppu>0?si.texto:`${ins.stock} ${ins.unidad}`}`, false);
+    return;
+  }
 
   setSaving(true);
   const now = new Date();
@@ -628,30 +662,36 @@ async function doRegistrar(){
     id: Date.now(), tipo: tipoActual,
     fecha: fmtDate(now), hora: fmtTime(now), timestamp: now.toISOString(),
     usuario: usuario.nombre, rol: usuario.rol,
-    insumoId: ins.id, insumoNombre: ins.nombre, unidad: ins.unidad,
-    cantidad: cant, costo, nota
+    insumoId: ins.id, insumoNombre: ins.nombre,
+    unidad: unidMov, cantidad: cantMov, costo, nota,
   };
 
-  // Actualiza stock local
   insumos = insumos.map(i=> i.id===ins.id
-    ? {...i, stock: +(tipoActual==="entrada"?i.stock+cant:i.stock-cant).toFixed(3)}
+    ? {...i, stock: +(tipoActual==="entrada" ? i.stock+delta : i.stock-delta).toFixed(3)}
     : i);
   movs = [mov, ...movs];
 
-  // Guarda en Sheets
   try {
     await Promise.all([
       apiPost({action:"saveInsumos",   data: insumos}),
       apiPost({action:"addMovimiento", data: mov})
     ]);
-    notify(tipoActual==="entrada"?`✓ +${cant} ${ins.unidad} de ${ins.nombre}`:`✓ -${cant} ${ins.unidad} de ${ins.nombre}`);
-  } catch {
-    notify("Error guardando en Sheets",false);
-  }
+    let msg = tipoActual==="entrada"
+      ? (ppu>0 ? `✓ +${cantInput} ${ins.unidad}${cantInput>1?"s":""} (${delta} pzas) de ${ins.nombre}` : `✓ +${cantInput} ${ins.unidad} de ${ins.nombre}`)
+      : (ppu>0 && usoTipo==="pieza"
+          ? `✓ -${cantInput} pieza${cantInput>1?"s":""} de ${ins.nombre}`
+          : ppu>0
+            ? `✓ -${cantInput} ${ins.unidad}${cantInput>1?"s":""} completa${cantInput>1?"s":""} (${delta} pzas) de ${ins.nombre}`
+            : `✓ -${cantInput} ${ins.unidad} de ${ins.nombre}`);
+    notify(msg);
+  } catch { notify("Error guardando en Sheets", false); }
 
   setSaving(false);
-  el("f-insumo").value=""; el("f-cant").value="";
-  el("f-costo").value="";  el("f-nota").value="";
+  limpiarInsumo();
+  el("f-cant").value=""; el("f-costo").value=""; el("f-nota").value="";
+  if(el("uso-tipo-row")) el("uso-tipo-row").style.display="none";
+  if(el("uso-info"))     el("uso-info").style.display="none";
+  if(el("f-cant-equiv")) el("f-cant-equiv").style.display="none";
   hide("stock-badge");
   populateInsumoSelects();
   renderUltimos();
@@ -710,18 +750,25 @@ function renderInventario(){
       const low=i.stock<3;
       const col=low?"var(--red)":"var(--green)";
       const bl =low?"var(--red)":"var(--green)";
+      const si  = stockInfo(i);
+      const ppu = i.piezasPorUnidad||0;
       html+=`<div class="insumo-row" style="border-left:4px solid ${bl};margin-bottom:8px">
         <div style="font-size:22px">🫙</div>
         <div style="flex:1">
           <div style="font-weight:700;font-size:15px">${i.nombre}</div>
-          <div style="font-size:12px;color:var(--muted)">${i.unidad}</div>
-          ${i.piezasPorUnidad>0?`<div style="font-size:12px;color:var(--orange)">${i.piezasPorUnidad} pzas/${i.unidad} · Total: ${i.stock*i.piezasPorUnidad} pzas</div>`:""}
+          <div style="font-size:12px;color:var(--muted)">${i.unidad}${ppu>0?` · ${ppu} pzas/${i.unidad}`:""}</div>
+          ${ppu>0&&si.cajas>0    ?`<div style="font-size:13px;color:var(--green);font-weight:600">📦 ${si.cajas} ${i.unidad}${si.cajas>1?"s":""} completa${si.cajas>1?"s":""}</div>`:""}
+          ${ppu>0&&si.piezasSueltas>0?`<div style="font-size:13px;color:var(--orange);font-weight:600">🔹 ${si.piezasSueltas} pieza${si.piezasSueltas>1?"s":""} suelta${si.piezasSueltas>1?"s":""}</div>`:""}
+          ${ppu>0?`<div style="font-size:11px;color:var(--muted)">${si.totalPiezas} pzas total</div>`:""}
           ${verPrecio&&i.precio?`<div style="font-size:12px;color:var(--muted)">Precio: ${fmtMoney(i.precio)}/${i.unidad}</div>`:""}
           ${verPrecio&&i.precio&&i.stock?`<div style="font-size:12px;color:var(--blue)">Valor: ${fmtMoney(i.precio*i.stock)}</div>`:""}
         </div>
         <div style="text-align:right">
-          <div style="font-weight:800;font-size:22px;color:${col}">${i.stock}</div>
-          <div style="font-size:12px;color:var(--muted)">${i.unidad}</div>
+          ${ppu>0
+            ?`<div style="font-weight:800;font-size:20px;color:${col}">${si.cajas}<span style="font-size:12px;font-weight:400"> caja${si.cajas>1?"s":""}</span></div>
+              ${si.piezasSueltas>0?`<div style="font-size:13px;color:var(--orange);font-weight:700">+${si.piezasSueltas} pza${si.piezasSueltas>1?"s":""}</div>`:""}`
+            :`<div style="font-weight:800;font-size:22px;color:${col}">${i.stock}</div><div style="font-size:12px;color:var(--muted)">${i.unidad}</div>`
+          }
           ${low?`<div style="font-size:11px;color:var(--red);font-weight:600">⚠ Bajo</div>`:""}
         </div>
       </div>`;
