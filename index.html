@@ -359,7 +359,7 @@ async function init(){
       apiGet("getMovimientos")
     ]);
     // Asegura que todos los insumos tengan todos los campos
-  insumos = (ins && ins.length) ? ins.map(i=>({...i, precio: i.precio||0, categoria: i.categoria||"ambos", grupo: i.grupo||"Otros", piezasPorUnidad: i.piezasPorUnidad||0})) : INSUMOS_INIT;
+  insumos = (ins && ins.length) ? ins.map(i=>({...i, precio: parseFloat(i.precio)||0, categoria: i.categoria||"ambos", grupo: i.grupo||"Otros", piezasPorUnidad: parseInt(i.piezasPorUnidad)||0, stock: parseFloat(i.stock)||0})) : INSUMOS_INIT;
     movs    = (mov && mov.length) ? mov.reverse() : []; // más recientes primero
     // Si era la primera vez, guarda los insumos iniciales
     if (!ins || !ins.length) {
@@ -580,8 +580,8 @@ function seleccionarInsumo(id){
 // Devuelve objeto {cajas, piezasSueltas, totalPiezas, texto} para mostrar stock
 function stockInfo(ins){
   if(!ins) return {cajas:0, piezasSueltas:0, totalPiezas:0, texto:"0"};
-  const ppu   = Number(ins.piezasPorUnidad) || 0;
-  const stock = Number(ins.stock) || 0;
+  const ppu   = parseInt(ins.piezasPorUnidad) || 0;
+  const stock = parseFloat(ins.stock) || 0;
   if(ppu > 0){
     const totalPiezas   = stock;
     const cajas         = Math.floor(totalPiezas / ppu);
@@ -642,7 +642,7 @@ async function doRegistrar(){
 
   if(!id||!cantInput||cantInput<=0){ notify("Completa insumo y cantidad",false); return; }
   const ins = insumos.find(i=>i.id===id);
-  const ppu = ins.piezasPorUnidad||0;
+  const ppu = parseInt(ins.piezasPorUnidad)||0;
 
   // Calcular delta en unidades internas (piezas si ppu>0, unidades si ppu==0)
   let delta      = cantInput;
