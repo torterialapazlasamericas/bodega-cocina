@@ -271,7 +271,7 @@
 
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────
-const API = "https://script.google.com/macros/s/AKfycbxCX0NGS6wt_ttzbEGd6vizXFtYFQCyc4LMTdTB4-6YalBFZnVh8aQuvbKpBVhhEBQC-w/exec";
+const API = "https://script.google.com/macros/s/AKfycbyESm8sPUIscQgObYXfZ-5DHnRzxKg2WgamB3erm1l-pMJ8FftciLigO_uGj4ysMNiEUw/exec";
 
 const USUARIOS = [
   { id:"admin",  nombre:"Administrador", pin:"4530", rol:"admin" },
@@ -833,6 +833,9 @@ async function doEliminar(id){
 async function doAgregarInsumo(){
   const nombre = el("n-nombre").value.trim();
   if(!nombre){ notify("Escribe el nombre",false); return; }
+  // Validar nombre duplicado
+  const existe = insumos.some(i => i.nombre.toLowerCase() === nombre.toLowerCase());
+  if(existe){ notify(`Ya existe un insumo llamado "${nombre}"`, false); return; }
   const nuevo = {id:Date.now(), nombre, unidad:el("n-unidad").value, stock:Number(el("n-stock").value)||0, precio:Number(el("n-precio").value)||0, categoria:el("n-categoria").value||"ambos"};
   insumos = [...insumos, nuevo];
   setSaving(true);
