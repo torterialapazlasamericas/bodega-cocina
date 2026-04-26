@@ -200,7 +200,13 @@
     <!-- INVENTARIO -->
     <div id="view-inventario" class="hidden">
       <div class="card">
-        <div class="card-title">Stock actual en bodega</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div class="card-title" style="margin-bottom:0">Stock actual en bodega</div>
+        </div>
+        <label>Filtrar por grupo</label>
+        <select id="inv-grupo" onchange="renderInventario()" style="margin-bottom:14px">
+          <option value="">Todos los grupos</option>
+        </select>
         <div id="inv-list"></div>
       </div>
     </div>
@@ -258,6 +264,9 @@
           <option value="cocina">👨‍🍳 Solo Cocina</option>
           <option value="venta">🛒 Solo Venta</option>
         </select>
+        <label>Grupo</label>
+        <input id="n-grupo" placeholder="Ej: Carnes, Bebidas, Desechables..." list="grupos-list" />
+        <datalist id="grupos-list"></datalist>
         <button class="btn-primary" onclick="doAgregarInsumo()">+ Agregar insumo</button>
       </div>
       <div class="card">
@@ -282,10 +291,10 @@ const USUARIOS = [
 ];
 
 const INSUMOS_INIT = [
-  {id:1,nombre:"Carne de cerdo",       unidad:"kg", stock:0, precio:0, categoria:"cocina"},
-  {id:2,nombre:"Carne de hamburguesa", unidad:"kg", stock:0, precio:0, categoria:"venta"},
-  {id:3,nombre:"Aceite",               unidad:"L",  stock:0, precio:0, categoria:"ambos"},
-  {id:4,nombre:"Vinagre",              unidad:"L",  stock:0, precio:0, categoria:"ambos"},
+  {id:1,nombre:"Carne de cerdo",       unidad:"kg", stock:0, precio:0, categoria:"cocina", grupo:"Carnes"},
+  {id:2,nombre:"Carne de hamburguesa", unidad:"kg", stock:0, precio:0, categoria:"venta",  grupo:"Carnes"},
+  {id:3,nombre:"Aceite",               unidad:"L",  stock:0, precio:0, categoria:"ambos",  grupo:"Otros"},
+  {id:4,nombre:"Vinagre",              unidad:"L",  stock:0, precio:0, categoria:"ambos",  grupo:"Otros"},
 ];
 
 // ── ESTADO ────────────────────────────────────────────────────────
@@ -344,8 +353,8 @@ async function init(){
       apiGet("getInsumos"),
       apiGet("getMovimientos")
     ]);
-    // Asegura que todos los insumos tengan campo precio y categoria
-  insumos = (ins && ins.length) ? ins.map(i=>({...i, precio: i.precio||0, categoria: i.categoria||"ambos"})) : INSUMOS_INIT;
+    // Asegura que todos los insumos tengan campo precio, categoria y grupo
+  insumos = (ins && ins.length) ? ins.map(i=>({...i, precio: i.precio||0, categoria: i.categoria||"ambos", grupo: i.grupo||"Otros"})) : INSUMOS_INIT;
     movs    = (mov && mov.length) ? mov.reverse() : []; // más recientes primero
     // Si era la primera vez, guarda los insumos iniciales
     if (!ins || !ins.length) {
@@ -470,7 +479,15 @@ function setView(key){
     setView("registrar"); return;
   }
   if(key==="registrar")  renderUltimos();
-  if(key==="inventario") renderInventario();
+  if(key==="inventario"){
+    // Poblar selector de grupos
+    const grupos = [...new Set(insumos.map(i=>i.grupo||"Otros"))].sort();
+    const sel = el("inv-grupo");
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Todos los grupos</option>' + grupos.map(g=>`<option value="${g}">${g}</option>`).join("");
+    sel.value = cur;
+    renderInventario();
+  }
   if(key==="historial")  renderHistorial();
   if(key==="admin")      renderAdmin();
 }
@@ -658,28 +675,51 @@ function renderUltimos(){
 
 // ── INVENTARIO ────────────────────────────────────────────────────
 function renderInventario(){
-  const div = el("inv-list");
+  const div      = el("inv-list");
+  const filtroG  = el("inv-grupo") ? el("inv-grupo").value : "";
   if(!insumos.length){ div.innerHTML=`<div style="color:var(--muted);text-align:center;padding:20px 0">No hay insumos</div>`; return; }
-  div.innerHTML = insumos.map(i=>{
-    const low=i.stock<3;
-    const col=low?"var(--red)":"var(--green)";
-    const bl =low?"var(--red)":"var(--green)";
-    const verPrecio = usuario && usuario.rol === "admin";
-    return `<div class="insumo-row" style="border-left:4px solid ${bl}">
-      <div style="font-size:24px">🫙</div>
-      <div style="flex:1">
-        <div style="font-weight:700;font-size:15px">${i.nombre}</div>
-        <div style="font-size:12px;color:var(--muted)">${i.unidad}</div>
-        ${verPrecio&&i.precio?`<div style="font-size:12px;color:var(--muted)">Precio: ${fmtMoney(i.precio)}/${i.unidad}</div>`:""}
-        ${verPrecio&&i.precio&&i.stock?`<div style="font-size:12px;color:var(--blue)">Valor: ${fmtMoney(i.precio*i.stock)}</div>`:""}
-      </div>
-      <div style="text-align:right">
-        <div style="font-weight:800;font-size:22px;color:${col}">${i.stock}</div>
-        <div style="font-size:12px;color:var(--muted)">${i.unidad}</div>
-        ${low?`<div style="font-size:11px;color:var(--red);font-weight:600">⚠ Bajo</div>`:""}
-      </div>
-    </div>`;
-  }).join("");
+
+  // Actualizar datalist de grupos en admin form
+  const grupos = [...new Set(insumos.map(i=>i.grupo||"Otros"))].sort();
+  const dl = el("grupos-list");
+  if(dl) dl.innerHTML = grupos.map(g=>`<option value="${g}">`).join("");
+
+  // Filtrar por grupo
+  const lista = filtroG ? insumos.filter(i=>(i.grupo||"Otros")===filtroG) : insumos;
+
+  // Agrupar
+  const porGrupo = {};
+  lista.forEach(i=>{
+    const g = i.grupo||"Otros";
+    if(!porGrupo[g]) porGrupo[g]=[];
+    porGrupo[g].push(i);
+  });
+
+  const verPrecio = usuario && usuario.rol === "admin";
+  let html = "";
+  Object.keys(porGrupo).sort().forEach(g=>{
+    html += `<div style="font-size:12px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:1px;padding:10px 0 6px">${g}</div>`;
+    porGrupo[g].forEach(i=>{
+      const low=i.stock<3;
+      const col=low?"var(--red)":"var(--green)";
+      const bl =low?"var(--red)":"var(--green)";
+      html+=`<div class="insumo-row" style="border-left:4px solid ${bl};margin-bottom:8px">
+        <div style="font-size:22px">🫙</div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:15px">${i.nombre}</div>
+          <div style="font-size:12px;color:var(--muted)">${i.unidad}</div>
+          ${verPrecio&&i.precio?`<div style="font-size:12px;color:var(--muted)">Precio: ${fmtMoney(i.precio)}/${i.unidad}</div>`:""}
+          ${verPrecio&&i.precio&&i.stock?`<div style="font-size:12px;color:var(--blue)">Valor: ${fmtMoney(i.precio*i.stock)}</div>`:""}
+        </div>
+        <div style="text-align:right">
+          <div style="font-weight:800;font-size:22px;color:${col}">${i.stock}</div>
+          <div style="font-size:12px;color:var(--muted)">${i.unidad}</div>
+          ${low?`<div style="font-size:11px;color:var(--red);font-weight:600">⚠ Bajo</div>`:""}
+        </div>
+      </div>`;
+    });
+  });
+  div.innerHTML = html;
 }
 
 // ── HISTORIAL ─────────────────────────────────────────────────────
@@ -752,7 +792,7 @@ async function doExcel(){
       "Costo ($)": m.costo??"", Nota: m.nota||""
     }));
     const catStr = c => c==="cocina"?"Solo Cocina":c==="venta"?"Solo Venta":"Ambos";
-    const dataStock = insumos.map(i=>({"Insumo":i.nombre,"Unidad":i.unidad,"Stock actual":i.stock,"Precio unitario ($)":i.precio||0,"Valor total ($)":+((i.precio||0)*(i.stock||0)).toFixed(2),"Área":catStr(i.categoria||"ambos")}));
+    const dataStock = insumos.map(i=>({"Grupo":i.grupo||"Otros","Insumo":i.nombre,"Unidad":i.unidad,"Stock actual":i.stock,"Precio unitario ($)":i.precio||0,"Valor total ($)":+((i.precio||0)*(i.stock||0)).toFixed(2),"Área":catStr(i.categoria||"ambos")}));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataMov),   "Movimientos");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataStock), "Stock actual");
@@ -782,6 +822,8 @@ function renderAdmin(){
           value="${i.precio||""}"
           style="width:110px;margin-bottom:0;padding:6px 8px;font-size:13px;flex-shrink:0"
           onkeydown="if(event.key==='Enter') guardarInsumoEdits(${i.id})" />
+        <input id="grp-${i.id}" value="${i.grupo||'Otros'}" placeholder="Grupo"
+          style="width:100px;margin-bottom:0;padding:6px 8px;font-size:13px;flex-shrink:0" list="grupos-list" />
         <select id="cat-${i.id}" style="margin-bottom:0;padding:6px 8px;font-size:13px;width:auto;flex:1">
           <option value="ambos"  ${cat==="ambos" ?"selected":""}>🔀 Ambos</option>
           <option value="cocina" ${cat==="cocina"?"selected":""}>👨‍🍳 Solo Cocina</option>
@@ -796,7 +838,8 @@ function renderAdmin(){
 async function guardarInsumoEdits(id){
   const precio    = Number(el("precio-"+id).value)||0;
   const categoria = el("cat-"+id).value;
-  insumos = insumos.map(i=> i.id===id ? {...i, precio, categoria} : i);
+  const grupo     = el("grp-"+id).value.trim()||"Otros";
+  insumos = insumos.map(i=> i.id===id ? {...i, precio, categoria, grupo} : i);
   setSaving(true);
   try {
     await apiPost({action:"saveInsumos", data:insumos});
@@ -841,7 +884,7 @@ async function doAgregarInsumo(){
   // Validar nombre duplicado
   const existe = insumos.some(i => i.nombre.toLowerCase() === nombre.toLowerCase());
   if(existe){ notify(`Ya existe un insumo llamado "${nombre}"`, false); return; }
-  const nuevo = {id:Date.now(), nombre, unidad:el("n-unidad").value, stock:Number(el("n-stock").value)||0, precio:Number(el("n-precio").value)||0, categoria:el("n-categoria").value||"ambos"};
+  const nuevo = {id:Date.now(), nombre, unidad:el("n-unidad").value, stock:Number(el("n-stock").value)||0, precio:Number(el("n-precio").value)||0, categoria:el("n-categoria").value||"ambos", grupo:el("n-grupo").value.trim()||"Otros"};
   insumos = [...insumos, nuevo];
   setSaving(true);
   try {
@@ -849,7 +892,7 @@ async function doAgregarInsumo(){
     notify(`✓ "${nombre}" agregado`);
   } catch { notify("Error guardando",false); }
   setSaving(false);
-  el("n-nombre").value=""; el("n-stock").value=""; el("n-precio").value=""; if(el("n-categoria")) el("n-categoria").value="ambos";
+  el("n-nombre").value=""; el("n-stock").value=""; el("n-precio").value=""; if(el("n-categoria")) el("n-categoria").value="ambos"; if(el("n-grupo")) el("n-grupo").value="";
   populateInsumoSelects();
   renderAdmin();
 }
