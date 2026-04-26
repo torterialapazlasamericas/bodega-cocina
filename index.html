@@ -288,11 +288,11 @@
 const API = "https://script.google.com/macros/s/AKfycbwUyeTfl3Ij3aQF5mqap7-NwnElr95GZud0hMxosaf5MumKVT0OZ3M-7DdTjDKEqXEwCg/exec";
 
 const USUARIOS = [
-  { id:"admin",  nombre:"Administrador", pin:"4530", rol:"admin" },
-  { id:"aide", nombre:"AIDE",        pin:"1968", rol:"cocina" },
-  { id:"toni",  nombre:"TONI",         pin:"1968", rol:"cocina_venta" },
-  { id:"andres",   nombre:"ANDRES",          pin:"1968", rol:"cocina_venta" },
-  { id:"cristofer",    nombre:"CRISTOFER",           pin:"1968", rol:"cocina_venta" },
+  { id:"admin",     nombre:"Administrador", pin:"4530", rol:"admin" },
+  { id:"aide",      nombre:"AIDE",          pin:"1968", rol:"cocina" },
+  { id:"toni",      nombre:"TONI",          pin:"1968", rol:"cocina_venta" },
+  { id:"andres",    nombre:"ANDRES",        pin:"1968", rol:"cocina_venta" },
+  { id:"cristofer", nombre:"CRISTOFER",     pin:"1968", rol:"cocina_venta" },
 ];
 
 const INSUMOS_INIT = [
@@ -488,9 +488,8 @@ function setView(key){
     // Poblar selector de grupos
     const grupos = [...new Set(insumos.map(i=>i.grupo||"Otros"))].sort();
     const sel = el("inv-grupo");
-    const cur = sel.value;
     sel.innerHTML = '<option value="">Todos los grupos</option>' + grupos.map(g=>`<option value="${g}">${g}</option>`).join("");
-    sel.value = cur;
+    sel.value = ""; // reset filtro al entrar
     renderInventario();
   }
   if(key==="historial")  renderHistorial();
@@ -576,6 +575,26 @@ function seleccionarInsumo(id){
   el("f-buscar").style.display = "none";
   el("f-insumo-list").style.display = "none";
   onInsumoChange();
+}
+
+// Devuelve objeto {cajas, piezasSueltas, totalPiezas, texto} para mostrar stock
+function stockInfo(ins){
+  if(!ins) return {cajas:0, piezasSueltas:0, totalPiezas:0, texto:"0"};
+  const ppu   = Number(ins.piezasPorUnidad) || 0;
+  const stock = Number(ins.stock) || 0;
+  if(ppu > 0){
+    const totalPiezas   = stock;
+    const cajas         = Math.floor(totalPiezas / ppu);
+    const piezasSueltas = totalPiezas % ppu;
+    const unidadNombre  = ins.unidad;
+    let texto = "";
+    if(cajas > 0)         texto += `${cajas} ${unidadNombre}${cajas>1?"s":""} completa${cajas>1?"s":""}`;
+    if(piezasSueltas > 0) texto += (texto?" + ":"") + `${piezasSueltas} pieza${piezasSueltas>1?"s":""} suelta${piezasSueltas>1?"s":""}`;
+    if(!texto)             texto = "0 piezas";
+    return {cajas, piezasSueltas, totalPiezas, texto};
+  } else {
+    return {cajas:0, piezasSueltas:0, totalPiezas:stock, texto:`${stock} ${ins.unidad}`};
+  }
 }
 
 function limpiarInsumo(){
@@ -747,7 +766,9 @@ function renderInventario(){
   Object.keys(porGrupo).sort().forEach(g=>{
     html += `<div style="font-size:12px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:1px;padding:10px 0 6px">${g}</div>`;
     porGrupo[g].forEach(i=>{
-      const low=i.stock<3;
+      const ppu2 = i.piezasPorUnidad||0;
+      const stockCheck = ppu2>0 ? i.stock : i.stock; // stock is always in piezas if ppu>0
+      const low = ppu2>0 ? i.stock < ppu2 : i.stock < 3; // bajo si menos de 1 unidad completa
       const col=low?"var(--red)":"var(--green)";
       const bl =low?"var(--red)":"var(--green)";
       const si  = stockInfo(i);
