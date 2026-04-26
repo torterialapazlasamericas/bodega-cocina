@@ -588,7 +588,7 @@ function stockInfo(ins){
     const piezasSueltas = totalPiezas % ppu;
     const unidadNombre  = ins.unidad;
     let texto = "";
-    if(cajas > 0)         texto += `${cajas} ${unidadNombre}${cajas>1?"s":""} completa${cajas>1?"s":""}`;
+    if(cajas > 0)         texto += `${cajas} ${unidadNombre}${cajas>1?"s":""}`;
     if(piezasSueltas > 0) texto += (texto?" + ":"") + `${piezasSueltas} pieza${piezasSueltas>1?"s":""} suelta${piezasSueltas>1?"s":""}`;
     if(!texto)             texto = "0 piezas";
     return {cajas, piezasSueltas, totalPiezas, texto};
@@ -767,8 +767,8 @@ function renderInventario(){
     html += `<div style="font-size:12px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:1px;padding:10px 0 6px">${g}</div>`;
     porGrupo[g].forEach(i=>{
       const ppu2 = i.piezasPorUnidad||0;
-      const stockCheck = ppu2>0 ? i.stock : i.stock; // stock is always in piezas if ppu>0
-      const low = ppu2>0 ? i.stock < ppu2 : i.stock < 3; // bajo si menos de 1 unidad completa
+      // Bajo: si ppu>0, menos de 1 unidad completa. Si no, menos de 3 unidades
+      const low = ppu2>0 ? i.stock < ppu2 : i.stock < 3;
       const col=low?"var(--red)":"var(--green)";
       const bl =low?"var(--red)":"var(--green)";
       const si  = stockInfo(i);
@@ -778,7 +778,7 @@ function renderInventario(){
         <div style="flex:1">
           <div style="font-weight:700;font-size:15px">${i.nombre}</div>
           <div style="font-size:12px;color:var(--muted)">${i.unidad}${ppu>0?` · ${ppu} pzas/${i.unidad}`:""}</div>
-          ${ppu>0&&si.cajas>0    ?`<div style="font-size:13px;color:var(--green);font-weight:600">📦 ${si.cajas} ${i.unidad}${si.cajas>1?"s":""} completa${si.cajas>1?"s":""}</div>`:""}
+          ${ppu>0&&si.cajas>0    ?`<div style="font-size:13px;color:var(--green);font-weight:600">📦 ${si.cajas} ${i.unidad}${si.cajas>1?"s":""}</div>`:""}
           ${ppu>0&&si.piezasSueltas>0?`<div style="font-size:13px;color:var(--orange);font-weight:600">🔹 ${si.piezasSueltas} pieza${si.piezasSueltas>1?"s":""} suelta${si.piezasSueltas>1?"s":""}</div>`:""}
           ${ppu>0?`<div style="font-size:11px;color:var(--muted)">${si.totalPiezas} pzas total</div>`:""}
           ${verPrecio&&i.precio?`<div style="font-size:12px;color:var(--muted)">Precio: ${fmtMoney(i.precio)}/${i.unidad}</div>`:""}
@@ -786,7 +786,7 @@ function renderInventario(){
         </div>
         <div style="text-align:right">
           ${ppu>0
-            ?`<div style="font-weight:800;font-size:20px;color:${col}">${si.cajas}<span style="font-size:12px;font-weight:400"> caja${si.cajas>1?"s":""}</span></div>
+            ?`<div style="font-weight:800;font-size:20px;color:${col}">${si.cajas}<span style="font-size:12px;font-weight:400"> ${i.unidad}${si.cajas>1?"s":""}</span></div>
               ${si.piezasSueltas>0?`<div style="font-size:13px;color:var(--orange);font-weight:700">+${si.piezasSueltas} pza${si.piezasSueltas>1?"s":""}</div>`:""}`
             :`<div style="font-weight:800;font-size:22px;color:${col}">${i.stock}</div><div style="font-size:12px;color:var(--muted)">${i.unidad}</div>`
           }
