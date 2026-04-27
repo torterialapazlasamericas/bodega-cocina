@@ -991,7 +991,11 @@ async function doAgregarInsumo(){
   // Validar nombre duplicado
   const existe = insumos.some(i => i.nombre.toLowerCase() === nombre.toLowerCase());
   if(existe){ notify(`Ya existe un insumo llamado "${nombre}"`, false); return; }
-  const nuevo = {id:Date.now(), nombre, unidad:el("n-unidad").value, stock:Number(el("n-stock").value)||0, precio:Number(el("n-precio").value)||0, categoria:el("n-categoria").value||"ambos", grupo:el("n-grupo").value.trim()||"Otros", piezasPorUnidad:Math.round(Number(el("n-piezas").value)||0)};
+  const ppuNuevo  = Math.round(Number(el("n-piezas").value)||0);
+  const stockInicialUnidades = Number(el("n-stock").value)||0;
+  // Internamente guardamos en piezas, Sheets guarda en unidades vía fórmula
+  const stockInicialPiezas = ppuNuevo > 0 ? stockInicialUnidades * ppuNuevo : stockInicialUnidades;
+  const nuevo = {id:Date.now(), nombre, unidad:el("n-unidad").value, stock:stockInicialPiezas, precio:Number(el("n-precio").value)||0, categoria:el("n-categoria").value||"ambos", grupo:el("n-grupo").value.trim()||"Otros", piezasPorUnidad:ppuNuevo};
   insumos = [...insumos, nuevo];
   setSaving(true);
   try {
