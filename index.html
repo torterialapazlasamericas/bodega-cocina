@@ -615,11 +615,13 @@ function onInsumoChange(){
   const mostrarStock = rol !== "cocina_venta";
   if(ins){
     if(mostrarStock){
-      let txt = `Stock: ${ins.stock} ${ins.unidad}`;
-      if(ins.piezasPorUnidad>0) txt += ` (${ins.stock*ins.piezasPorUnidad} pzas)`;
-      if(ins.stock<3) txt += " ⚠ Bajo";
+      const si2 = stockInfo(ins);
+      const ppu2 = parseInt(ins.piezasPorUnidad)||0;
+      let txt = ppu2>0 ? `Stock: ${si2.texto}` : `Stock: ${ins.stock} ${ins.unidad}`;
+      const low2 = ppu2>0 ? ins.stock < ppu2 : ins.stock < 3;
+      if(low2) txt += " ⚠ Bajo";
       badge.textContent = txt;
-      badge.className   = "stock-badge "+(ins.stock<3?"stock-low":"stock-ok");
+      badge.className   = "stock-badge "+(low2?"stock-low":"stock-ok");
       show("stock-badge");
     } else {
       hide("stock-badge");
@@ -646,6 +648,7 @@ async function doRegistrar(){
 
   // DEBUG temporal
   console.log("DEBUG registrar:", {nombre:ins.nombre, ppu, piezasPorUnidad:ins.piezasPorUnidad, tipoPiezas:typeof ins.piezasPorUnidad, cantInput, tipoActual});
+  if(tipoActual==="entrada") alert("DEBUG\nProducto: "+ins.nombre+"\npiezasPorUnidad: "+ins.piezasPorUnidad+" (tipo: "+typeof ins.piezasPorUnidad+")\nppu calculado: "+ppu+"\ncantidad: "+cantInput+"\ndelta que se guardará: "+(ppu>0?cantInput*ppu:cantInput)+" piezas");
 
   // Calcular delta en unidades internas (piezas si ppu>0, unidades si ppu==0)
   let delta      = cantInput;
@@ -871,7 +874,7 @@ async function doExcel(){
       "Costo ($)": m.costo??"", Nota: m.nota||""
     }));
     const catStr = c => c==="cocina"?"Solo Cocina":c==="venta"?"Solo Venta":"Ambos";
-    const dataStock = insumos.map(i=>({"Grupo":i.grupo||"Otros","Insumo":i.nombre,"Unidad":i.unidad,"Stock actual":i.stock,"Piezas por unidad":i.piezasPorUnidad||0,"Total piezas":i.piezasPorUnidad>0?i.stock*(i.piezasPorUnidad||0):""  ,"Precio unitario ($)":i.precio||0,"Valor total ($)":+((i.precio||0)*(i.stock||0)).toFixed(2),"Área":catStr(i.categoria||"ambos")}));
+    const dataStock = insumos.map(i=>({"Grupo":i.grupo||"Otros","Insumo":i.nombre,"Unidad":i.unidad,"Stock actual":i.stock,"Piezas por unidad":i.piezasPorUnidad||0,"Total piezas":i.piezasPorUnidad>0?i.stock:""  ,"Precio unitario ($)":i.precio||0,"Valor total ($)":i.piezasPorUnidad>0 ? +(((i.stock/i.piezasPorUnidad)*(i.precio||0))).toFixed(2) : +((i.precio||0)*(i.stock||0)).toFixed(2),"Área":catStr(i.categoria||"ambos")}));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataMov),   "Movimientos");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataStock), "Stock actual");
@@ -921,7 +924,7 @@ async function guardarInsumoEdits(id){
   const precio          = Number(el("precio-"+id).value)||0;
   const categoria       = el("cat-"+id).value;
   const grupo           = el("grp-"+id).value.trim()||"Otros";
-  const piezasPorUnidad = Number(el("pzs-"+id).value)||0;
+  const piezasPorUnidad = Math.round(Number(el("pzs-"+id).value)||0);
   insumos = insumos.map(i=> i.id===id ? {...i, precio, categoria, grupo, piezasPorUnidad} : i);
   setSaving(true);
   try {
@@ -967,7 +970,7 @@ async function doAgregarInsumo(){
   // Validar nombre duplicado
   const existe = insumos.some(i => i.nombre.toLowerCase() === nombre.toLowerCase());
   if(existe){ notify(`Ya existe un insumo llamado "${nombre}"`, false); return; }
-  const nuevo = {id:Date.now(), nombre, unidad:el("n-unidad").value, stock:Number(el("n-stock").value)||0, precio:Number(el("n-precio").value)||0, categoria:el("n-categoria").value||"ambos", grupo:el("n-grupo").value.trim()||"Otros", piezasPorUnidad:Number(el("n-piezas").value)||0};
+  const nuevo = {id:Date.now(), nombre, unidad:el("n-unidad").value, stock:Number(el("n-stock").value)||0, precio:Number(el("n-precio").value)||0, categoria:el("n-categoria").value||"ambos", grupo:el("n-grupo").value.trim()||"Otros", piezasPorUnidad:Math.round(Number(el("n-piezas").value)||0)};
   insumos = [...insumos, nuevo];
   setSaving(true);
   try {
