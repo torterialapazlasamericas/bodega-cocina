@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bodega Cocina</title>
+  <title>Bodega Cocina v2.5</title>
+  <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="pragma" content="no-cache">
+  <meta http-equiv="expires" content="0">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -646,9 +649,7 @@ async function doRegistrar(){
   const ins = insumos.find(i=>i.id===id);
   const ppu = parseInt(ins.piezasPorUnidad)||0;
 
-  // DEBUG temporal
-  console.log("DEBUG registrar:", {nombre:ins.nombre, ppu, piezasPorUnidad:ins.piezasPorUnidad, tipoPiezas:typeof ins.piezasPorUnidad, cantInput, tipoActual});
-  if(tipoActual==="entrada") alert("DEBUG\nProducto: "+ins.nombre+"\npiezasPorUnidad: "+ins.piezasPorUnidad+" (tipo: "+typeof ins.piezasPorUnidad+")\nppu calculado: "+ppu+"\ncantidad: "+cantInput+"\ndelta que se guardará: "+(ppu>0?cantInput*ppu:cantInput)+" piezas");
+
 
   // Calcular delta en unidades internas (piezas si ppu>0, unidades si ppu==0)
   let delta      = cantInput;
