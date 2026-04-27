@@ -651,34 +651,32 @@ async function doRegistrar(){
   const ins = insumos.find(i=>i.id===id);
   const ppu = parseInt(ins.piezasPorUnidad)||0;
 
-
-
-  // Calcular delta en unidades internas (piezas si ppu>0, unidades si ppu==0)
-  let delta      = cantInput;
-  let unidMov    = ins.unidad;
-  let cantMov    = cantInput;
+  // cantInput siempre en UNIDADES (cajas, paquetes, kg, piezas)
+  // stock interno en PIEZAS (para calcular cajas+sueltas)
+  let deltaUnidades = cantInput;      // lo que guardamos en col F
+  let deltaPiezas   = cantInput;      // lo que usamos internamente
+  let unidMov       = ins.unidad;
+  let cantMov       = cantInput;
 
   if(ppu > 0){
     if(tipoActual === "entrada"){
-      delta   = cantInput * ppu;  // entrada en cajas → guardamos en piezas
-      unidMov = ins.unidad;
-      cantMov = cantInput;
+      deltaUnidades = cantInput;        // guardamos en unidades
+      deltaPiezas   = cantInput * ppu;  // internamente en piezas
     } else {
-      // uso: depende si es por pieza o por unidad completa
+      // uso
       if(usoTipo === "pieza"){
-        delta   = cantInput;        // ya son piezas
-        unidMov = "pieza";
-        cantMov = cantInput;
+        deltaPiezas   = cantInput;
+        deltaUnidades = cantInput / ppu;
+        unidMov       = "pieza";
       } else {
-        delta   = cantInput * ppu;  // cajas completas → piezas
-        unidMov = ins.unidad;
-        cantMov = cantInput;
+        deltaPiezas   = cantInput * ppu;
+        deltaUnidades = cantInput;
       }
     }
   }
 
-  // Validar stock
-  if(tipoActual==="uso" && delta > ins.stock){
+  // Validar stock (en piezas)
+  if(tipoActual==="uso" && deltaPiezas > ins.stock){
     const si = stockInfo(ins);
     notify(`Stock insuficiente. Quedan: ${ppu>0?si.texto:`${ins.stock} ${ins.unidad}`}`, false);
     return;
@@ -694,22 +692,38 @@ async function doRegistrar(){
     unidad: unidMov, cantidad: cantMov, costo, nota,
   };
 
+  // Actualizar stock interno en PIEZAS
+  const newStockPiezas = tipoActual==="entrada"
+    ? ins.stock + deltaPiezas
+    : ins.stock - deltaPiezas;
+
+  // Para guardar en Sheets: convertir piezas → unidades
+  const newStockUnidades = ppu > 0 ? newStockPiezas / ppu : newStockPiezas;
+
   insumos = insumos.map(i=> i.id===ins.id
-    ? {...i, stock: +(tipoActual==="entrada" ? i.stock+delta : i.stock-delta).toFixed(3)}
+    ? {...i, stock: +newStockPiezas.toFixed(3)}
     : i);
   movs = [mov, ...movs];
 
+  // Guardar insumos con stock en UNIDADES (col F) para que fórmula Sheets funcione
+  const insumosParaGuardar = insumos.map(i => {
+    const ppuI = parseInt(i.piezasPorUnidad)||0;
+    return {...i, stock: ppuI > 0 ? i.stock / ppuI : i.stock};
+  });
+
   try {
     await Promise.all([
-      apiPost({action:"saveInsumos",   data: insumos}),
+      apiPost({action:"saveInsumos",   data: insumosParaGuardar}),
       apiPost({action:"addMovimiento", data: mov})
     ]);
     let msg = tipoActual==="entrada"
-      ? (ppu>0 ? `✓ +${cantInput} ${ins.unidad}${cantInput>1?"s":""} (${delta} pzas) de ${ins.nombre}` : `✓ +${cantInput} ${ins.unidad} de ${ins.nombre}`)
+      ? (ppu>0
+          ? `✓ +${cantInput} ${ins.unidad}${cantInput>1?"s":""} (${deltaPiezas} pzas) de ${ins.nombre}`
+          : `✓ +${cantInput} ${ins.unidad} de ${ins.nombre}`)
       : (ppu>0 && usoTipo==="pieza"
           ? `✓ -${cantInput} pieza${cantInput>1?"s":""} de ${ins.nombre}`
           : ppu>0
-            ? `✓ -${cantInput} ${ins.unidad}${cantInput>1?"s":""} completa${cantInput>1?"s":""} (${delta} pzas) de ${ins.nombre}`
+            ? `✓ -${cantInput} ${ins.unidad}${cantInput>1?"s":""} (${deltaPiezas} pzas) de ${ins.nombre}`
             : `✓ -${cantInput} ${ins.unidad} de ${ins.nombre}`);
     notify(msg);
   } catch { notify("Error guardando en Sheets", false); }
@@ -931,7 +945,11 @@ async function guardarInsumoEdits(id){
   insumos = insumos.map(i=> i.id===id ? {...i, precio, categoria, grupo, piezasPorUnidad} : i);
   setSaving(true);
   try {
-    await apiPost({action:"saveInsumos", data:insumos});
+    const insumosParaGuardar = insumos.map(i => {
+      const ppuI = parseInt(i.piezasPorUnidad)||0;
+      return {...i, stock: ppuI > 0 ? i.stock / ppuI : i.stock};
+    });
+    await apiPost({action:"saveInsumos", data: insumosParaGuardar});
     notify("✓ Insumo actualizado");
   } catch { notify("Error guardando",false); }
   setSaving(false);
@@ -977,7 +995,12 @@ async function doAgregarInsumo(){
   insumos = [...insumos, nuevo];
   setSaving(true);
   try {
-    await apiPost({action:"saveInsumos", data:insumos});
+    // Guardar con stock en unidades para que fórmula Sheets funcione
+    const insumosParaGuardar = insumos.map(i => {
+      const ppuI = parseInt(i.piezasPorUnidad)||0;
+      return {...i, stock: ppuI > 0 ? i.stock / ppuI : i.stock};
+    });
+    await apiPost({action:"saveInsumos", data: insumosParaGuardar});
     notify(`✓ "${nombre}" agregado`);
   } catch { notify("Error guardando",false); }
   setSaving(false);
