@@ -288,7 +288,7 @@
 
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────
-const API = "https://script.google.com/macros/s/AKfycbxx3-yW4_B3uNwE9J77S7s-ZuHl38OBh-kq9ph6DZWzQ51L_YNUilZp1CANz8m4XFY3rg/exec";
+const API = "https://script.google.com/macros/s/AKfycbweNB-XIGTHa-UsgBgh5_J-oxKM41ugIQYZmBa6cInmySW4bQ5lSMvvUuP1qFmczy3irg/exec";
 
 const USUARIOS = [
   { id:"admin",     nombre:"Administrador", pin:"4530", rol:"admin" },
@@ -303,8 +303,6 @@ const INSUMOS_INIT = [
   {id:2,nombre:"Carne de hamburguesa", unidad:"kg",     stock:3,  precio:200, categoria:"venta",  grupo:"Carnes",        piezasPorUnidad:0},
   {id:3,nombre:"Aceite",               unidad:"pieza",  stock:5,  precio:45,  categoria:"ambos",  grupo:"Otros",         piezasPorUnidad:0},
   {id:4,nombre:"Vinagre",              unidad:"pieza",  stock:2,  precio:15,  categoria:"ambos",  grupo:"Otros",         piezasPorUnidad:0},
-  {id:5,nombre:"Caja de Leche 1.5LT", unidad:"caja",   stock:36, precio:160, categoria:"cocina", grupo:"Bebidas Cocina", piezasPorUnidad:6},
-  {id:6,nombre:"Paquete Chorizo",      unidad:"paquete",stock:20, precio:135, categoria:"venta",  grupo:"Carne Venta",   piezasPorUnidad:10},
 ];
 
 // ── ESTADO ────────────────────────────────────────────────────────
@@ -364,6 +362,7 @@ async function init(){
       apiGet("getMovimientos")
     ]);
     // Asegura que todos los insumos tengan todos los campos
+  // Stock viene en UNIDADES desde Sheets (col F)
   insumos = (ins && ins.length) ? ins.map(i=>({...i, stock: parseFloat(i.stock)||0, precio: parseFloat(i.precio)||0, categoria: i.categoria||"ambos", grupo: i.grupo||"Otros", piezasPorUnidad: parseInt(i.piezasPorUnidad)||0})) : INSUMOS_INIT;
     movs    = (mov && mov.length) ? mov.reverse() : []; // más recientes primero
     // Si era la primera vez, guarda los insumos iniciales
@@ -582,21 +581,25 @@ function seleccionarInsumo(id){
   onInsumoChange();
 }
 
-// Devuelve objeto {cajas, piezasSueltas, totalPiezas, texto} para mostrar stock
+// Devuelve objeto {cajas, piezasSueltas, totalPiezas, texto}
+// stock viene en UNIDADES (cajas, paquetes, kg, piezas)
+// ppu = piezas por unidad
 function stockInfo(ins){
   if(!ins) return {cajas:0, piezasSueltas:0, totalPiezas:0, texto:"0"};
   const ppu   = parseInt(ins.piezasPorUnidad) || 0;
   const stock = parseFloat(ins.stock) || 0;
   if(ppu > 0){
-    const totalPiezas   = stock;
-    const cajas         = Math.floor(totalPiezas / ppu);
-    const piezasSueltas = totalPiezas % ppu;
-    const unidadNombre  = ins.unidad;
+    // stock en unidades (ej: 6 cajas)
+    const cajasCompletas = Math.floor(stock);
+    const fraccion       = stock - cajasCompletas;
+    const piezasSueltas  = Math.round(fraccion * ppu);
+    const totalPiezas    = Math.round(stock * ppu);
+    const unidadNombre   = ins.unidad;
     let texto = "";
-    if(cajas > 0)         texto += `${cajas} ${unidadNombre}${cajas>1?"s":""}`;
-    if(piezasSueltas > 0) texto += (texto?" + ":"") + `${piezasSueltas} pieza${piezasSueltas>1?"s":""} suelta${piezasSueltas>1?"s":""}`;
-    if(!texto)             texto = "0 piezas";
-    return {cajas, piezasSueltas, totalPiezas, texto};
+    if(cajasCompletas > 0) texto += `${cajasCompletas} ${unidadNombre}${cajasCompletas>1?"s":""}`;
+    if(piezasSueltas > 0)  texto += (texto?" + ":"") + `${piezasSueltas} pieza${piezasSueltas>1?"s":""} suelta${piezasSueltas>1?"s":""}`;
+    if(!texto)              texto = `0 ${unidadNombre}s`;
+    return {cajas:cajasCompletas, piezasSueltas, totalPiezas, texto};
   } else {
     return {cajas:0, piezasSueltas:0, totalPiezas:stock, texto:`${stock} ${ins.unidad}`};
   }
@@ -623,7 +626,7 @@ function onInsumoChange(){
       const si2 = stockInfo(ins);
       const ppu2 = parseInt(ins.piezasPorUnidad)||0;
       let txt = ppu2>0 ? `Stock: ${si2.texto}` : `Stock: ${ins.stock} ${ins.unidad}`;
-      const low2 = ppu2>0 ? ins.stock < ppu2 : ins.stock < 3;
+      const low2 = ins.stock < 1; // bajo si menos de 1 unidad
       if(low2) txt += " ⚠ Bajo";
       badge.textContent = txt;
       badge.className   = "stock-badge "+(low2?"stock-low":"stock-ok");
@@ -651,32 +654,19 @@ async function doRegistrar(){
   const ins = insumos.find(i=>i.id===id);
   const ppu = parseInt(ins.piezasPorUnidad)||0;
 
-  // cantInput siempre en UNIDADES (cajas, paquetes, kg, piezas)
-  // stock interno en PIEZAS (para calcular cajas+sueltas)
-  let deltaUnidades = cantInput;      // lo que guardamos en col F
-  let deltaPiezas   = cantInput;      // lo que usamos internamente
+  // Todo en UNIDADES. ppu solo para convertir "por pieza" a unidades
+  let deltaUnidades = cantInput;
   let unidMov       = ins.unidad;
   let cantMov       = cantInput;
 
-  if(ppu > 0){
-    if(tipoActual === "entrada"){
-      deltaUnidades = cantInput;        // guardamos en unidades
-      deltaPiezas   = cantInput * ppu;  // internamente en piezas
-    } else {
-      // uso
-      if(usoTipo === "pieza"){
-        deltaPiezas   = cantInput;
-        deltaUnidades = cantInput / ppu;
-        unidMov       = "pieza";
-      } else {
-        deltaPiezas   = cantInput * ppu;
-        deltaUnidades = cantInput;
-      }
-    }
+  if(ppu > 0 && tipoActual === "uso" && usoTipo === "pieza"){
+    // Usuario registra en piezas → convertir a unidades
+    deltaUnidades = cantInput / ppu;
+    unidMov       = "pieza";
   }
 
-  // Validar stock (en piezas)
-  if(tipoActual==="uso" && deltaPiezas > ins.stock){
+  // Validar stock (en unidades)
+  if(tipoActual==="uso" && deltaUnidades > ins.stock){
     const si = stockInfo(ins);
     notify(`Stock insuficiente. Quedan: ${ppu>0?si.texto:`${ins.stock} ${ins.unidad}`}`, false);
     return;
@@ -692,38 +682,27 @@ async function doRegistrar(){
     unidad: unidMov, cantidad: cantMov, costo, nota,
   };
 
-  // Actualizar stock interno en PIEZAS
-  const newStockPiezas = tipoActual==="entrada"
-    ? ins.stock + deltaPiezas
-    : ins.stock - deltaPiezas;
+  // Actualizar stock en UNIDADES
+  const newStock = tipoActual==="entrada"
+    ? +(ins.stock + deltaUnidades).toFixed(4)
+    : +(ins.stock - deltaUnidades).toFixed(4);
 
-  // Para guardar en Sheets: convertir piezas → unidades
-  const newStockUnidades = ppu > 0 ? newStockPiezas / ppu : newStockPiezas;
-
-  insumos = insumos.map(i=> i.id===ins.id
-    ? {...i, stock: +newStockPiezas.toFixed(3)}
-    : i);
+  insumos = insumos.map(i=> i.id===ins.id ? {...i, stock: newStock} : i);
   movs = [mov, ...movs];
-
-  // Guardar insumos con stock en UNIDADES (col F) para que fórmula Sheets funcione
-  const insumosParaGuardar = insumos.map(i => {
-    const ppuI = parseInt(i.piezasPorUnidad)||0;
-    return {...i, stock: ppuI > 0 ? i.stock / ppuI : i.stock};
-  });
 
   try {
     await Promise.all([
-      apiPost({action:"saveInsumos",   data: insumosParaGuardar}),
+      apiPost({action:"saveInsumos",   data: insumos}),
       apiPost({action:"addMovimiento", data: mov})
     ]);
     let msg = tipoActual==="entrada"
       ? (ppu>0
-          ? `✓ +${cantInput} ${ins.unidad}${cantInput>1?"s":""} (${deltaPiezas} pzas) de ${ins.nombre}`
+          ? `✓ +${cantInput} ${ins.unidad}${cantInput>1?"s":""} (${cantInput*ppu} pzas) de ${ins.nombre}`
           : `✓ +${cantInput} ${ins.unidad} de ${ins.nombre}`)
       : (ppu>0 && usoTipo==="pieza"
           ? `✓ -${cantInput} pieza${cantInput>1?"s":""} de ${ins.nombre}`
           : ppu>0
-            ? `✓ -${cantInput} ${ins.unidad}${cantInput>1?"s":""} (${deltaPiezas} pzas) de ${ins.nombre}`
+            ? `✓ -${cantInput} ${ins.unidad}${cantInput>1?"s":""} (${cantInput*ppu} pzas) de ${ins.nombre}`
             : `✓ -${cantInput} ${ins.unidad} de ${ins.nombre}`);
     notify(msg);
   } catch { notify("Error guardando en Sheets", false); }
@@ -790,8 +769,8 @@ function renderInventario(){
     html += `<div style="font-size:12px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:1px;padding:10px 0 6px">${g}</div>`;
     porGrupo[g].forEach(i=>{
       const ppu2 = i.piezasPorUnidad||0;
-      // Bajo: si ppu>0, menos de 1 unidad completa. Si no, menos de 3 unidades
-      const low = ppu2>0 ? i.stock < ppu2 : i.stock < 3;
+      // Bajo si menos de 1 unidad (caja, paquete, kg, pieza)
+      const low = i.stock < 1;
       const col=low?"var(--red)":"var(--green)";
       const bl =low?"var(--red)":"var(--green)";
       const si  = stockInfo(i);
@@ -945,11 +924,7 @@ async function guardarInsumoEdits(id){
   insumos = insumos.map(i=> i.id===id ? {...i, precio, categoria, grupo, piezasPorUnidad} : i);
   setSaving(true);
   try {
-    const insumosParaGuardar = insumos.map(i => {
-      const ppuI = parseInt(i.piezasPorUnidad)||0;
-      return {...i, stock: ppuI > 0 ? i.stock / ppuI : i.stock};
-    });
-    await apiPost({action:"saveInsumos", data: insumosParaGuardar});
+    await apiPost({action:"saveInsumos", data: insumos});
     notify("✓ Insumo actualizado");
   } catch { notify("Error guardando",false); }
   setSaving(false);
@@ -991,20 +966,13 @@ async function doAgregarInsumo(){
   // Validar nombre duplicado
   const existe = insumos.some(i => i.nombre.toLowerCase() === nombre.toLowerCase());
   if(existe){ notify(`Ya existe un insumo llamado "${nombre}"`, false); return; }
-  const ppuNuevo  = Math.round(Number(el("n-piezas").value)||0);
-  const stockInicialUnidades = Number(el("n-stock").value)||0;
-  // Internamente guardamos en piezas, Sheets guarda en unidades vía fórmula
-  const stockInicialPiezas = ppuNuevo > 0 ? stockInicialUnidades * ppuNuevo : stockInicialUnidades;
-  const nuevo = {id:Date.now(), nombre, unidad:el("n-unidad").value, stock:stockInicialPiezas, precio:Number(el("n-precio").value)||0, categoria:el("n-categoria").value||"ambos", grupo:el("n-grupo").value.trim()||"Otros", piezasPorUnidad:ppuNuevo};
+  const ppuNuevo = Math.round(Number(el("n-piezas").value)||0);
+  const stockInicial = Number(el("n-stock").value)||0; // siempre en UNIDADES
+  const nuevo = {id:Date.now(), nombre, unidad:el("n-unidad").value, stock:stockInicial, precio:Number(el("n-precio").value)||0, categoria:el("n-categoria").value||"ambos", grupo:el("n-grupo").value.trim()||"Otros", piezasPorUnidad:ppuNuevo};
   insumos = [...insumos, nuevo];
   setSaving(true);
   try {
-    // Guardar con stock en unidades para que fórmula Sheets funcione
-    const insumosParaGuardar = insumos.map(i => {
-      const ppuI = parseInt(i.piezasPorUnidad)||0;
-      return {...i, stock: ppuI > 0 ? i.stock / ppuI : i.stock};
-    });
-    await apiPost({action:"saveInsumos", data: insumosParaGuardar});
+    await apiPost({action:"saveInsumos", data: insumos});
     notify(`✓ "${nombre}" agregado`);
   } catch { notify("Error guardando",false); }
   setSaving(false);
