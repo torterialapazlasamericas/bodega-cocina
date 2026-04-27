@@ -659,6 +659,7 @@ async function doRegistrar(){
   if(ppu > 0){
     if(tipoActual === "entrada"){
       delta   = cantInput * ppu;  // entrada en cajas → guardamos en piezas
+      notify(`Calculando: ${cantInput} ${ins.unidad} × ${ppu} pzas = ${delta} piezas`, true);
       unidMov = ins.unidad;
       cantMov = cantInput;
     } else {
