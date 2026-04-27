@@ -288,7 +288,7 @@
 
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────
-const API = "https://script.google.com/macros/s/AKfycbzc5Bt470BDCY7QJFijkaa0LuvDhszwwGOCKR5QIJ0XlUxiibg3wIVw8y5jUsaEgdSZcw/exec";
+const API = "https://script.google.com/macros/s/AKfycbysNwetlnlflDi2muUH0cbywxnVP2WfqV2Zf-kT20Ep9yG7gBLBg4SPHqcCZ8fci2yhgg/exec";
 
 const USUARIOS = [
   { id:"admin",     nombre:"Administrador", pin:"4530", rol:"admin" },
@@ -299,10 +299,12 @@ const USUARIOS = [
 ];
 
 const INSUMOS_INIT = [
-  {id:1,nombre:"Carne de cerdo",       unidad:"kg",    stock:0, precio:0, categoria:"cocina", grupo:"Carnes",      piezasPorUnidad:0},
-  {id:2,nombre:"Carne de hamburguesa", unidad:"kg",    stock:0, precio:0, categoria:"venta",  grupo:"Carnes",      piezasPorUnidad:0},
-  {id:3,nombre:"Aceite",               unidad:"pieza", stock:0, precio:0, categoria:"ambos",  grupo:"Otros",       piezasPorUnidad:0},
-  {id:4,nombre:"Vinagre",              unidad:"pieza", stock:0, precio:0, categoria:"ambos",  grupo:"Otros",       piezasPorUnidad:0},
+  {id:1,nombre:"Carne de cerdo",       unidad:"kg",     stock:10, precio:110, categoria:"cocina", grupo:"Carnes",        piezasPorUnidad:0},
+  {id:2,nombre:"Carne de hamburguesa", unidad:"kg",     stock:3,  precio:200, categoria:"venta",  grupo:"Carnes",        piezasPorUnidad:0},
+  {id:3,nombre:"Aceite",               unidad:"pieza",  stock:5,  precio:45,  categoria:"ambos",  grupo:"Otros",         piezasPorUnidad:0},
+  {id:4,nombre:"Vinagre",              unidad:"pieza",  stock:2,  precio:15,  categoria:"ambos",  grupo:"Otros",         piezasPorUnidad:0},
+  {id:5,nombre:"Caja de Leche 1.5LT", unidad:"caja",   stock:36, precio:160, categoria:"cocina", grupo:"Bebidas Cocina", piezasPorUnidad:6},
+  {id:6,nombre:"Paquete Chorizo",      unidad:"paquete",stock:20, precio:135, categoria:"venta",  grupo:"Carne Venta",   piezasPorUnidad:10},
 ];
 
 // ── ESTADO ────────────────────────────────────────────────────────
@@ -362,7 +364,7 @@ async function init(){
       apiGet("getMovimientos")
     ]);
     // Asegura que todos los insumos tengan todos los campos
-  insumos = (ins && ins.length) ? ins.map(i=>({...i, precio: parseFloat(i.precio)||0, categoria: i.categoria||"ambos", grupo: i.grupo||"Otros", piezasPorUnidad: parseInt(i.piezasPorUnidad)||0, stock: parseFloat(i.stock)||0})) : INSUMOS_INIT;
+  insumos = (ins && ins.length) ? ins.map(i=>({...i, stock: parseFloat(i.stock)||0, precio: parseFloat(i.precio)||0, categoria: i.categoria||"ambos", grupo: i.grupo||"Otros", piezasPorUnidad: parseInt(i.piezasPorUnidad)||0})) : INSUMOS_INIT;
     movs    = (mov && mov.length) ? mov.reverse() : []; // más recientes primero
     // Si era la primera vez, guarda los insumos iniciales
     if (!ins || !ins.length) {
@@ -659,7 +661,6 @@ async function doRegistrar(){
   if(ppu > 0){
     if(tipoActual === "entrada"){
       delta   = cantInput * ppu;  // entrada en cajas → guardamos en piezas
-      notify(`Calculando: ${cantInput} ${ins.unidad} × ${ppu} pzas = ${delta} piezas`, true);
       unidMov = ins.unidad;
       cantMov = cantInput;
     } else {
