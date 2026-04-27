@@ -644,6 +644,9 @@ async function doRegistrar(){
   const ins = insumos.find(i=>i.id===id);
   const ppu = parseInt(ins.piezasPorUnidad)||0;
 
+  // DEBUG temporal
+  console.log("DEBUG registrar:", {nombre:ins.nombre, ppu, piezasPorUnidad:ins.piezasPorUnidad, tipoPiezas:typeof ins.piezasPorUnidad, cantInput, tipoActual});
+
   // Calcular delta en unidades internas (piezas si ppu>0, unidades si ppu==0)
   let delta      = cantInput;
   let unidMov    = ins.unidad;
