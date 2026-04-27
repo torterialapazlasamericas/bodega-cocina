@@ -684,10 +684,21 @@ async function doRegistrar(){
 
   // Actualizar stock en UNIDADES
   const newStock = tipoActual==="entrada"
+    // 🔥 actualizar precio si hay costo  CAMBIO HECHO POR MI
+let nuevoPrecio = ins.precio;
+
+if (tipoActual === "entrada" && costo && cantInput > 0) {
+  nuevoPrecio = costo / cantInput;
+}
     ? +(ins.stock + deltaUnidades).toFixed(4)
     : +(ins.stock - deltaUnidades).toFixed(4);
 
-  insumos = insumos.map(i=> i.id===ins.id ? {...i, stock: newStock} : i);
+ // insumos = insumos.map(i=> i.id===ins.id ? {...i, stock: newStock} : i); CAMBIO HECHO POR MI
+  insumos = insumos.map(i=> 
+  i.id===ins.id 
+    ? {...i, stock: newStock, precio: nuevoPrecio}
+    : i
+);
   movs = [mov, ...movs];
 
   try {
