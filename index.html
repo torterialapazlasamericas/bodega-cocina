@@ -126,6 +126,7 @@
           <span style="color:var(--muted);font-size:12px">✕ cambiar</span>
         </div>
         <input type="hidden" id="f-insumo" />
+        <div id="insumo-nombre-selected" style="display:none;font-weight:700;font-size:16px;color:var(--orange);margin-bottom:10px;padding:8px 12px;background:var(--hi);border-radius:8px;border-left:3px solid var(--orange)"></div>
         <div id="stock-badge" class="hidden stock-badge"></div>
         <!-- Toggle pieza vs unidad completa -->
         <div id="uso-tipo-row" style="display:none;gap:8px;margin-bottom:12px">
@@ -433,7 +434,12 @@ function filtrarInsumos(){
   const q=el("f-buscar").value.trim().toLowerCase();
   const list=el("f-insumo-list");
   const mostrarStock=usuario?.rol!=="cocina_venta";
-  const filtrados=getInsumosParaArea().filter(i=>!q||i.nombre.toLowerCase().includes(q));
+  // Para entrada: cocina ve todos los insumos (puede meter cualquiera a bodega)
+  // Para uso: aplica filtro de área
+  const base = (tipoActual==="entrada" && usuario?.rol!=="cocina_venta")
+    ? insumos
+    : getInsumosParaArea();
+  const filtrados=base.filter(i=>!q||i.nombre.toLowerCase().includes(q));
   if(!filtrados.length){
     list.innerHTML=`<div style="padding:12px;color:var(--muted);text-align:center;font-size:13px">Sin resultados</div>`;
     list.style.display="block"; return;
@@ -460,6 +466,10 @@ function seleccionarInsumo(id){
   el("f-insumo-sel").style.display="flex";
   el("f-buscar").style.display="none";
   el("f-insumo-list").style.display="none";
+  // Mostrar nombre del producto seleccionado
+  const nDiv=el("insumo-nombre-selected");
+  nDiv.textContent="📦 "+ins.nombre;
+  nDiv.style.display="block";
   onInsumoChange();
 }
 
@@ -490,6 +500,8 @@ function limpiarInsumo(){
   el("f-insumo-list").style.display="none";
   hide("stock-badge");
   el("f-cant-label").textContent="Cantidad";
+  const nDiv=el("insumo-nombre-selected");
+  if(nDiv) nDiv.style.display="none";
 }
 
 function onInsumoChange(){
@@ -647,9 +659,13 @@ async function doRegistrar(){
 // ── ÚLTIMOS MOVIMIENTOS ───────────────────────────────────────────
 function renderUltimos(){
   const div=el("ultimos");
-  if(!movs.length){ div.innerHTML=""; return; }
+  // Cada perfil solo ve sus propios movimientos (admin ve todos)
+  const misMov = usuario.rol==="admin"
+    ? movs
+    : movs.filter(m=>m.usuario===usuario.nombre);
+  if(!misMov.length){ div.innerHTML="<div style='color:var(--muted);font-size:13px;padding:10px 0'>Sin movimientos registrados</div>"; return; }
   let html=`<label style="margin-bottom:8px">Últimos movimientos</label>`;
-  movs.slice(0,5).forEach(m=>{
+  misMov.slice(0,5).forEach(m=>{
     const bg=m.tipo==="entrada"?"var(--greenD)":"var(--redD)";
     const col=m.tipo==="entrada"?"var(--green)":"var(--red)";
     html+=`<div class="mov-row">
@@ -718,6 +734,8 @@ function getMovFiltrados(){
   const hInsumo=el("h-insumo").value, hTipo=el("h-tipo").value;
   const hDesde=el("h-desde").value,   hHasta=el("h-hasta").value;
   return movs.filter(m=>{
+    // No admin: solo ver sus propios movimientos
+    if(usuario.rol!=="admin" && m.usuario!==usuario.nombre) return false;
     if(hInsumo && String(m.insumoId)!==hInsumo) return false;
     if(hTipo   && m.tipo!==hTipo) return false;
     if(hDesde  && new Date(m.timestamp)<new Date(hDesde)) return false;
@@ -735,7 +753,7 @@ function renderHistorial(){
     const costo=filtrados.filter(m=>m.tipo==="entrada"&&m.costo).reduce((a,m)=>a+m.costo,0);
     let html=`<div class="resumen-card"><div class="resumen-num" style="color:var(--green)">${entradas.toFixed(1)}</div><div class="resumen-lbl">Entradas</div></div>
       <div class="resumen-card"><div class="resumen-num" style="color:var(--red)">${usos.toFixed(1)}</div><div class="resumen-lbl">Usos</div></div>`;
-    if(costo>0) html+=`<div class="resumen-card"><div class="resumen-num" style="color:var(--blue);font-size:16px">${fmtMoney(costo)}</div><div class="resumen-lbl">Costo</div></div>`;
+    if(costo>0 && usuario.rol==="admin") html+=`<div class="resumen-card"><div class="resumen-num" style="color:var(--blue);font-size:16px">${fmtMoney(costo)}</div><div class="resumen-lbl">Costo</div></div>`;
     resumen.innerHTML=html; show("h-resumen");
   } else { hide("h-resumen"); }
 
@@ -752,7 +770,7 @@ function renderHistorial(){
       </div>
       <div style="text-align:right">
         <div style="font-weight:700;color:${col}">${m.tipo==="entrada"?"+":"-"}${m.cantidad} ${m.unidad}</div>
-        ${m.costo?`<div style="font-size:12px;color:var(--muted)">${fmtMoney(m.costo)}</div>`:""}
+        ${m.costo&&usuario.rol==="admin"?`<div style="font-size:12px;color:var(--muted)">${fmtMoney(m.costo)}</div>`:""}
       </div>
     </div>`;
   }).join("");
