@@ -782,13 +782,43 @@ async function doExcel(){
   if(!filtrados.length){ notify("No hay datos para exportar",false); return; }
   try {
     const XLSX=await import("https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs");
-    const dataMov=filtrados.map(m=>({
-      Tipo:m.tipo==="entrada"?"Entrada":"Uso en cocina",
-      Fecha:m.fecha, Hora:m.hora,
-      Usuario:m.usuario, Perfil:rolLabel(m.rol),
-      Insumo:m.insumoNombre, Cantidad:m.cantidad, Unidad:m.unidad,
-      "Costo ($)":m.costo??"", Nota:m.nota||""
-    }));
+    const dataMov=filtrados.map(m=>{
+      // Buscar el insumo para calcular costo unitario
+      const ins = insumos.find(i=>i.nombre===m.insumoNombre);
+      const ppu = ins ? parseInt(ins.piezasPorUnidad)||0 : 0;
+      const precioCaja = ins ? parseFloat(ins.precio)||0 : 0;
+      const precioPieza = ppu>0 ? precioCaja/ppu : precioCaja;
+
+      let costoUnitario = "";
+      let costoTotal    = "";
+
+      if(ins){
+        if(m.unidad==="pieza" && ppu>0){
+          // Uso por pieza
+          costoUnitario = +precioPieza.toFixed(2);
+          costoTotal    = +(precioPieza * m.cantidad).toFixed(2);
+        } else {
+          // Uso por unidad completa (caja, paquete, kg, etc.)
+          costoUnitario = +precioCaja.toFixed(2);
+          costoTotal    = +(precioCaja * m.cantidad).toFixed(2);
+        }
+      }
+
+      return {
+        Tipo:       m.tipo==="entrada"?"Entrada":"Uso en cocina",
+        Fecha:      m.fecha,
+        Hora:       m.hora,
+        Usuario:    m.usuario,
+        Perfil:     rolLabel(m.rol),
+        Insumo:     m.insumoNombre,
+        Cantidad:   m.cantidad,
+        Unidad:     m.unidad,
+        "Costo compra ($)": m.tipo==="entrada" ? (m.costo??"") : "",
+        "Precio unitario ($)": costoUnitario,
+        "Costo del uso ($)":  m.tipo==="uso" ? costoTotal : "",
+        Nota:       m.nota||""
+      };
+    });
     const catStr=c=>c==="cocina"?"Solo Cocina":c==="venta"?"Solo Venta":"Ambos";
     const dataStock=insumos.map(i=>{
       const ppu=parseInt(i.piezasPorUnidad)||0;
