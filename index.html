@@ -144,8 +144,8 @@
         <input id="f-cant" type="number" min="0.01" step="0.01" placeholder="Ej: 5" oninput="onCantChange()" />
         <div id="f-cant-equiv" style="display:none;font-size:12px;color:var(--muted);margin-top:-10px;margin-bottom:13px;padding:6px 10px;background:var(--hi);border-radius:6px"></div>
         <div id="costo-section">
-          <label>Costo total de la compra (opcional, $)</label>
-          <input id="f-costo" type="number" min="0" step="0.01" placeholder="Ej: 270.00" />
+          <label>Precio por unidad (opcional, $) <span style="color:var(--muted);font-weight:400;text-transform:none">— actualiza el precio del insumo</span></label>
+          <input id="f-costo" type="number" min="0" step="0.01" placeholder="Ej: 170.00" />
         </div>
         <label>Nota / Proveedor (opcional)</label>
         <input id="f-nota" type="text" placeholder="Ej: SAMS CLUB" />
@@ -630,12 +630,11 @@ async function doRegistrar(){
     ? +(ins.stock+deltaUnidades).toFixed(4)
     : +(ins.stock-deltaUnidades).toFixed(4);
 
-  // Actualizar precio por unidad si hay costo en la entrada
-  // deltaUnidades = cantidad de cajas/paquetes/kg ingresados
-  // precio = costo total / unidades ingresadas
+  // El campo "costo" en una entrada = precio por unidad (caja, paquete, kg)
+  // Se guarda directamente como precio unitario del insumo
   let newPrecio = ins.precio;
-  if(tipoActual==="entrada" && costo && deltaUnidades>0){
-    newPrecio = +(costo / deltaUnidades).toFixed(2);
+  if(tipoActual==="entrada" && costo && costo>0){
+    newPrecio = +Number(costo).toFixed(2);
   }
 
   // Calcular stockEnPiezas para columna I del Sheets
@@ -826,7 +825,7 @@ async function doExcel(){
         Insumo:     m.insumoNombre,
         Cantidad:   m.cantidad,
         Unidad:     m.unidad,
-        "Costo compra ($)": m.tipo==="entrada" ? (m.costo??"") : "",
+        "Precio x unidad ($)": m.tipo==="entrada" ? (m.costo??"") : "",
         "Precio unitario ($)": costoUnitario,
         "Costo del uso ($)":  m.tipo==="uso" ? costoTotal : "",
         Nota:       m.nota||""
