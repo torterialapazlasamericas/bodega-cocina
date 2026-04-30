@@ -622,10 +622,12 @@ async function doRegistrar(){
     ? +(ins.stock+deltaUnidades).toFixed(4)
     : +(ins.stock-deltaUnidades).toFixed(4);
 
-  // Si hay costo en una entrada, actualizar precio unitario automáticamente
+  // Actualizar precio por unidad si hay costo en la entrada
+  // deltaUnidades = cantidad de cajas/paquetes/kg ingresados
+  // precio = costo total / unidades ingresadas
   let newPrecio = ins.precio;
-  if(tipoActual==="entrada" && costo && cantInput>0){
-    newPrecio = +(costo / cantInput).toFixed(2);
+  if(tipoActual==="entrada" && costo && deltaUnidades>0){
+    newPrecio = +(costo / deltaUnidades).toFixed(2);
   }
 
   insumos=insumos.map(i=>i.id===ins.id?{...i,stock:newStock,precio:newPrecio}:i);
