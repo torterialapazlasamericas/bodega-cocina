@@ -239,7 +239,7 @@
 </div>
 
 <script>
-const API = "https://script.google.com/macros/s/AKfycbzd_P3Y8XGOP1VTTs94w-Pv6CODCy8wfllQvVdYLhOvJDAJEct0YeeuSghszkiIOkD_/exec";
+const API = "https://script.google.com/macros/s/AKfycbw5ZOEUp1AS94EfDZiaSj1MVnWFL8EIPzCEt-l4G9eWNeJGVxZUfMreALEzR0VleErj2g/exec";
 
 const USUARIOS = [
   { id:"admin",     nombre:"Administrador", pin:"4530", rol:"admin" },
@@ -250,10 +250,10 @@ const USUARIOS = [
 ];
 
 const INSUMOS_INIT = [
-  {id:1,nombre:"Carne de cerdo",       unidad:"kg",    stock:0, precio:0, categoria:"cocina", grupo:"Carnes", piezasPorUnidad:0},
-  {id:2,nombre:"Carne de hamburguesa", unidad:"kg",    stock:0, precio:0, categoria:"venta",  grupo:"Carnes", piezasPorUnidad:0},
-  {id:3,nombre:"Aceite",               unidad:"pieza", stock:0, precio:0, categoria:"ambos",  grupo:"Otros",  piezasPorUnidad:0},
-  {id:4,nombre:"Vinagre",              unidad:"pieza", stock:0, precio:0, categoria:"ambos",  grupo:"Otros",  piezasPorUnidad:0},
+  {id:1,nombre:"Carne de cerdo",       unidad:"kg",    stock:0, precio:0, categoria:"cocina", grupo:"Carnes", piezasPorUnidad:0, stockEnPiezas:0},
+  {id:2,nombre:"Carne de hamburguesa", unidad:"kg",    stock:0, precio:0, categoria:"venta",  grupo:"Carnes", piezasPorUnidad:0, stockEnPiezas:0},
+  {id:3,nombre:"Aceite",               unidad:"pieza", stock:0, precio:0, categoria:"ambos",  grupo:"Otros",  piezasPorUnidad:0, stockEnPiezas:0},
+  {id:4,nombre:"Vinagre",              unidad:"pieza", stock:0, precio:0, categoria:"ambos",  grupo:"Otros",  piezasPorUnidad:0, stockEnPiezas:0},
 ];
 
 let usuario    = null;
@@ -300,7 +300,14 @@ async function init(){
   try {
     const [ins, mov] = await Promise.all([apiGet("getInsumos"), apiGet("getMovimientos")]);
     insumos = (ins && ins.length)
-      ? ins.map(i=>({...i, stock:parseFloat(i.stock)||0, precio:parseFloat(i.precio)||0, categoria:i.categoria||"ambos", grupo:i.grupo||"Otros", piezasPorUnidad:parseInt(i.piezasPorUnidad)||0}))
+      ? ins.map(i=>{
+          const s   = parseFloat(i.stock)||0;
+          const ppu = parseInt(i.piezasPorUnidad)||0;
+          const spe = parseFloat(i.stockEnPiezas)||0;
+          // Si stockEnPiezas no está guardado aún, calcularlo
+          const stockEnPiezas = spe>0 ? spe : (ppu>0 ? Math.round(s*ppu) : s);
+          return {...i, stock:s, precio:parseFloat(i.precio)||0, categoria:i.categoria||"ambos", grupo:i.grupo||"Otros", piezasPorUnidad:ppu, stockEnPiezas};
+        })
       : INSUMOS_INIT;
     movs = (mov && mov.length) ? mov.reverse() : [];
     if (!ins || !ins.length) await apiPost({action:"saveInsumos", data:insumos});
@@ -482,7 +489,8 @@ function stockInfo(ins){
     const cajasCompletas=Math.floor(stock);
     const fraccion=stock-cajasCompletas;
     const piezasSueltas=Math.round(fraccion*ppu);
-    const totalPiezas=Math.round(stock*ppu);
+    // Usar stockEnPiezas si está disponible (más preciso), sino calcular
+    const totalPiezas = ins.stockEnPiezas>0 ? Math.round(ins.stockEnPiezas) : Math.round(stock*ppu);
     let texto="";
     if(cajasCompletas>0) texto+=`${cajasCompletas} ${ins.unidad}${cajasCompletas>1?"s":""}`;
     if(piezasSueltas>0)  texto+=(texto?" + ":"")+`${piezasSueltas} pieza${piezasSueltas>1?"s":""} suelta${piezasSueltas>1?"s":""}`;
@@ -630,7 +638,10 @@ async function doRegistrar(){
     newPrecio = +(costo / deltaUnidades).toFixed(2);
   }
 
-  insumos=insumos.map(i=>i.id===ins.id?{...i,stock:newStock,precio:newPrecio}:i);
+  // Calcular stockEnPiezas para columna I del Sheets
+  const ppu2 = parseInt(ins.piezasPorUnidad)||0;
+  const newStockEnPiezas = ppu2>0 ? Math.round(newStock*ppu2) : newStock;
+  insumos=insumos.map(i=>i.id===ins.id?{...i,stock:newStock,precio:newPrecio,stockEnPiezas:newStockEnPiezas}:i);
   movs=[mov,...movs];
 
   try {
@@ -885,7 +896,11 @@ async function guardarInsumoEdits(id){
   const categoria=el("cat-"+id).value;
   const grupo=el("grp-"+id).value.trim()||"Otros";
   const piezasPorUnidad=Math.round(Number(el("pzs-"+id).value)||0);
-  insumos=insumos.map(i=>i.id===id?{...i,precio,categoria,grupo,piezasPorUnidad}:i);
+  insumos=insumos.map(i=>{
+    if(i.id!==id) return i;
+    const nuevoStockEnPiezas = piezasPorUnidad>0 ? Math.round(i.stock*piezasPorUnidad) : i.stock;
+    return {...i,precio,categoria,grupo,piezasPorUnidad,stockEnPiezas:nuevoStockEnPiezas};
+  });
   setSaving(true);
   try {
     await apiPost({action:"saveInsumos",data:insumos});
@@ -923,7 +938,8 @@ async function doAgregarInsumo(){
   if(insumos.some(i=>i.nombre.toLowerCase()===nombre.toLowerCase())){ notify(`Ya existe "${nombre}"`,false); return; }
   const ppuNuevo=Math.round(Number(el("n-piezas").value)||0);
   const stockInicial=Number(el("n-stock").value)||0;
-  const nuevo={id:Date.now(),nombre,unidad:el("n-unidad").value,stock:stockInicial,precio:Number(el("n-precio").value)||0,categoria:el("n-categoria").value||"ambos",grupo:el("n-grupo").value.trim()||"Otros",piezasPorUnidad:ppuNuevo};
+  const stockInicialPiezas = ppuNuevo>0 ? Math.round(stockInicial*ppuNuevo) : stockInicial;
+  const nuevo={id:Date.now(),nombre,unidad:el("n-unidad").value,stock:stockInicial,precio:Number(el("n-precio").value)||0,categoria:el("n-categoria").value||"ambos",grupo:el("n-grupo").value.trim()||"Otros",piezasPorUnidad:ppuNuevo,stockEnPiezas:stockInicialPiezas};
   insumos=[...insumos,nuevo];
   setSaving(true);
   try { await apiPost({action:"saveInsumos",data:insumos}); notify(`✓ "${nombre}" agregado`); }
