@@ -162,6 +162,10 @@
         <select id="inv-grupo" onchange="renderInventario()" style="margin-bottom:14px">
           <option value="">Todos los grupos</option>
         </select>
+        <div id="inv-total" style="display:none;background:var(--hi);border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:13px;color:var(--muted)">Valor total en bodega</span>
+          <span id="inv-total-val" style="font-size:20px;font-weight:800;color:var(--blue)"></span>
+        </div>
         <div id="inv-list"></div>
       </div>
     </div>
@@ -203,6 +207,7 @@
             <label>Unidad</label>
             <select id="n-unidad">
               <option value="kg">Kilogramos (kg)</option>
+              <option value="g">Gramos (g)</option>
               <option value="pieza">Pieza</option>
               <option value="caja">Caja</option>
               <option value="paquete">Paquete</option>
@@ -231,7 +236,14 @@
       </div>
       <div class="card">
         <div class="card-title">Gestionar insumos</div>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Edita precio, grupo, área o elimina insumos.</p>
+        <div style="display:flex;gap:8px;margin-bottom:14px">
+          <input id="admin-buscar" type="text" placeholder="🔍 Buscar insumo..." oninput="renderAdmin()"
+            style="flex:2;margin-bottom:0" />
+          <select id="admin-grupo-filtro" onchange="renderAdmin()"
+            style="flex:1;margin-bottom:0">
+            <option value="">Todos los grupos</option>
+          </select>
+        </div>
         <div id="del-list"></div>
       </div>
     </div>
@@ -707,6 +719,22 @@ function renderInventario(){
   lista.forEach(i=>{ const g=i.grupo||"Otros"; if(!porGrupo[g]) porGrupo[g]=[]; porGrupo[g].push(i); });
 
   const verPrecio=usuario&&usuario.rol==="admin";
+
+  // Calcular y mostrar valor total en bodega (solo admin)
+  if(verPrecio){
+    const totalValor = lista.reduce((sum,i)=>{
+      const ppu=parseInt(i.piezasPorUnidad)||0;
+      return sum + (parseFloat(i.precio)||0) * parseFloat(i.stock||0);
+    }, 0);
+    const totalDiv = el("inv-total");
+    if(totalDiv){
+      totalDiv.style.display="flex";
+      el("inv-total-val").textContent = fmtMoney(totalValor);
+    }
+  } else {
+    const totalDiv = el("inv-total");
+    if(totalDiv) totalDiv.style.display="none";
+  }
   let html="";
   Object.keys(porGrupo).sort().forEach(g=>{
     html+=`<div style="font-size:12px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:1px;padding:10px 0 6px">${g}</div>`;
@@ -855,8 +883,29 @@ function renderAdmin(){
   const dl=el("grupos-list");
   if(dl) dl.innerHTML=grupos.map(g=>`<option value="${g}">`).join("");
 
+  // Poblar filtro de grupo en gestión
+  const gfiltro=el("admin-grupo-filtro");
+  if(gfiltro){
+    const cur=gfiltro.value;
+    gfiltro.innerHTML='<option value="">Todos los grupos</option>'+grupos.map(g=>`<option value="${g}">${g}</option>`).join("");
+    gfiltro.value=cur;
+  }
+
+  // Aplicar filtros
+  const q=(el("admin-buscar")?.value||"").trim().toLowerCase();
+  const gf=el("admin-grupo-filtro")?.value||"";
+  const listaFiltrada=insumos.filter(i=>{
+    if(gf && (i.grupo||"Otros")!==gf) return false;
+    if(q && !i.nombre.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
   const div=el("del-list");
-  div.innerHTML=insumos.map(i=>{
+  if(!listaFiltrada.length){
+    div.innerHTML=`<div style="color:var(--muted);text-align:center;padding:16px 0">Sin resultados</div>`;
+    return;
+  }
+  div.innerHTML=listaFiltrada.map(i=>{
     const cat=i.categoria||"ambos";
     const catLabel=cat==="cocina"?"👨‍🍳 Cocina":cat==="venta"?"🛒 Venta":"🔀 Ambos";
     const si=stockInfo(i);
