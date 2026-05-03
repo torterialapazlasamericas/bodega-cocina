@@ -207,7 +207,14 @@
           <label>Nombre</label>
           <input id="nu-nombre" placeholder="Ej: María" />
           <label>PIN (números)</label>
-          <input id="nu-pin" type="password" maxlength="8" placeholder="Ej: 1234" />
+          <div style="display:flex;gap:6px;margin-bottom:13px">
+            <input id="nu-pin" type="password" maxlength="8" placeholder="Ej: 1234"
+              style="flex:1;margin-bottom:0" />
+            <button onclick="togglePinVer('nu-pin','ojo-nuevo')" id="ojo-nuevo"
+              style="padding:6px 10px;background:var(--hi);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:14px;color:var(--muted)">
+              👁️
+            </button>
+          </div>
           <label>Perfil</label>
           <select id="nu-rol">
             <option value="cocina">👨‍🍳 Cocina</option>
@@ -1063,6 +1070,19 @@ function doLogin(){
   } else { show("pin-error"); el("pin-input").value=""; }
 }
 
+function togglePinVer(inputId, btnId){
+  const input = document.getElementById(inputId);
+  const btn   = document.getElementById(btnId);
+  if(!input) return;
+  if(input.type==="password"){
+    input.type="text";
+    if(btn) btn.textContent="🙈";
+  } else {
+    input.type="password";
+    if(btn) btn.textContent="👁️";
+  }
+}
+
 function renderAdministracion(){
   // Sincronizar con usuarios dinámicos
   const div = el("usuarios-list");
@@ -1084,8 +1104,14 @@ function renderAdministracion(){
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <input id="usr-nombre-${u.id}" value="${u.nombre}" placeholder="Nombre"
           style="flex:2;min-width:100px;margin-bottom:0;padding:6px 8px;font-size:13px" />
-        <input id="usr-pin-${u.id}" type="password" value="${u.pin}" placeholder="Nuevo PIN"
-          maxlength="8" style="width:90px;flex-shrink:0;margin-bottom:0;padding:6px 8px;font-size:13px;font-family:monospace;letter-spacing:4px" />
+        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+          <input id="usr-pin-${u.id}" type="password" value="${u.pin}" placeholder="PIN"
+            maxlength="8" style="width:80px;margin-bottom:0;padding:6px 8px;font-size:13px;font-family:monospace;letter-spacing:4px" />
+          <button onclick="togglePinVer('usr-pin-${u.id}','ojo-${u.id}')" id="ojo-${u.id}"
+            style="padding:6px 8px;background:var(--hi);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:14px;flex-shrink:0;color:var(--muted)">
+            👁️
+          </button>
+        </div>
         <select id="usr-rol-${u.id}" style="margin-bottom:0;padding:6px 8px;font-size:13px;flex:1;min-width:120px">
           <option value="cocina"       ${u.rol==="cocina"      ?"selected":""}>👨‍🍳 Cocina</option>
           <option value="cocina_venta" ${u.rol==="cocina_venta"?"selected":""}>🛒 Cocina Venta</option>
