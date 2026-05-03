@@ -281,7 +281,7 @@
 </div>
 
 <script>
-const API = "https://script.google.com/macros/s/AKfycbw5ZOEUp1AS94EfDZiaSj1MVnWFL8EIPzCEt-l4G9eWNeJGVxZUfMreALEzR0VleErj2g/exec";
+const API = "https://script.google.com/macros/s/AKfycbxk6QEYxtoVeLMSn_H5FhbD4Pc-vgjeMBs8vK7L7yK0fhMnINBQOWzPee-BoCLzIoZEWQ/exec";
 
 const USUARIOS = [
   { id:"admin",     nombre:"Administrador", pin:"4530", rol:"admin" },
@@ -340,7 +340,7 @@ async function apiPost(body){
 async function init(){
   show("spinner");
   try {
-    const [ins, mov] = await Promise.all([apiGet("getInsumos"), apiGet("getMovimientos")]);
+    const [ins, mov, usr] = await Promise.all([apiGet("getInsumos"), apiGet("getMovimientos"), apiGet("getUsuarios")]);
     insumos = (ins && ins.length)
       ? ins.map(i=>{
           const s   = parseFloat(i.stock)||0;
@@ -353,6 +353,12 @@ async function init(){
       : INSUMOS_INIT;
     movs = (mov && mov.length) ? mov.reverse() : [];
     if (!ins || !ins.length) await apiPost({action:"saveInsumos", data:insumos});
+    // Cargar usuarios desde Sheets
+    if(usr && usr.length){
+      usuariosDinamicos = usr;
+    } else {
+      await apiPost({action:"saveUsuarios", data:usuariosDinamicos});
+    }
   } catch(e){
     insumos = INSUMOS_INIT; movs = [];
   }
@@ -1035,25 +1041,17 @@ async function doAgregarInsumo(){
 
 // ── GESTIÓN DE USUARIOS ──────────────────────────────────────────
 // Usuarios se guardan en localStorage para persistir entre sesiones
-const USUARIOS_KEY = "bodega:usuarios";
+// Usuarios dinámicos - se sincronizan con Sheets
+let usuariosDinamicos = [...USUARIOS];
 
-function cargarUsuarios(){
+async function guardarUsuarios(lista){
+  usuariosDinamicos = lista;
   try {
-    const saved = localStorage.getItem(USUARIOS_KEY);
-    if(saved){
-      const parsed = JSON.parse(saved);
-      if(parsed && parsed.length) return parsed;
-    }
-  } catch(e){}
-  return [...USUARIOS]; // fallback a los usuarios por defecto
+    await apiPost({action:"saveUsuarios", data:lista});
+  } catch(e){
+    notify("Error guardando usuarios",false);
+  }
 }
-
-function guardarUsuarios(lista){
-  try { localStorage.setItem(USUARIOS_KEY, JSON.stringify(lista)); } catch(e){}
-}
-
-// Reemplazar USUARIOS con versión dinámica
-let usuariosDinamicos = cargarUsuarios();
 
 // Override doLogin para usar usuarios dinámicos
 const _doLoginOriginal = doLogin;
@@ -1123,14 +1121,14 @@ function renderAdministracion(){
   }).join("");
 }
 
-function guardarUsuario(id){
+async function guardarUsuario(id){
   const nombre = el("usr-nombre-"+id).value.trim();
   const pin    = el("usr-pin-"+id).value.trim();
   const rol    = el("usr-rol-"+id).value;
   if(!nombre){ notify("El nombre no puede estar vacío",false); return; }
   if(!pin || pin.length<4){ notify("El PIN debe tener al menos 4 dígitos",false); return; }
   usuariosDinamicos = usuariosDinamicos.map(u=> u.id===id ? {...u, nombre, pin, rol} : u);
-  guardarUsuarios(usuariosDinamicos);
+  await guardarUsuarios(usuariosDinamicos);
   notify(`✓ Usuario "${nombre}" actualizado`);
   renderAdministracion();
   renderLogin(); // actualizar pantalla de login
@@ -1144,17 +1142,17 @@ function confirmarBorrarUsuario(id){
     <button class="btn-sm" onclick="renderAdministracion()" style="margin-left:6px">Cancelar</button>`;
 }
 
-function borrarUsuario(id){
+async function borrarUsuario(id){
   if(id==="admin"){ notify("No puedes eliminar al administrador",false); return; }
   const u = usuariosDinamicos.find(u=>u.id===id);
   usuariosDinamicos = usuariosDinamicos.filter(u=>u.id!==id);
-  guardarUsuarios(usuariosDinamicos);
+  await guardarUsuarios(usuariosDinamicos);
   notify(`Usuario "${u?.nombre}" eliminado`);
   renderAdministracion();
   renderLogin();
 }
 
-function doAgregarUsuario(){
+async function doAgregarUsuario(){
   const nombre = el("nu-nombre").value.trim();
   const pin    = el("nu-pin").value.trim();
   const rol    = el("nu-rol").value;
@@ -1166,7 +1164,7 @@ function doAgregarUsuario(){
   const nuevoId = nombre.toLowerCase().replace(/\s+/g,"-")+"-"+Date.now();
   const nuevo = {id:nuevoId, nombre, pin, rol};
   usuariosDinamicos = [...usuariosDinamicos, nuevo];
-  guardarUsuarios(usuariosDinamicos);
+  await guardarUsuarios(usuariosDinamicos);
   notify(`✓ Usuario "${nombre}" creado`);
   el("nu-nombre").value=""; el("nu-pin").value=""; el("nu-rol").value="cocina";
   renderAdministracion();
