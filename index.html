@@ -50,7 +50,7 @@
     header { background:var(--surface); border-bottom:1px solid var(--border); padding:12px 16px; display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:10; }
     .rol-badge { font-size:11px; padding:3px 10px; border-radius:20px; font-weight:600; text-transform:uppercase; letter-spacing:1px; }
     .saving-dot { width:7px; height:7px; border-radius:50%; background:var(--green); display:inline-block; margin-left:7px; animation:pulse 1s infinite; }
-    nav { display:flex; gap:4px; padding:10px 14px; background:var(--surface); border-bottom:1px solid var(--border); overflow-x:auto; }
+    nav { display:flex; gap:4px; padding:10px 14px; background:var(--surface); border-bottom:1px solid var(--border); overflow-x:auto; position:sticky; top:57px; z-index:9; }
     .nav-btn { padding:8px 14px; border-radius:8px; border:none; background:transparent; color:var(--muted); font-size:13px; cursor:pointer; white-space:nowrap; }
     .nav-btn.active { background:var(--orange); color:#fff; font-weight:700; }
     main { padding:16px 14px; max-width:520px; margin:0 auto; }
@@ -196,6 +196,29 @@
       </div>
     </div>
 
+    <!-- ADMINISTRACIÓN DE USUARIOS -->
+    <div id="view-administracion" class="hidden">
+      <div class="card">
+        <div class="card-title">👥 Gestión de usuarios</div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:18px">Crea, edita o elimina los usuarios que pueden acceder a la app.</p>
+        <div id="usuarios-list"></div>
+        <div style="border-top:1px solid var(--border);margin-top:20px;padding-top:20px">
+          <div class="card-title" style="font-size:15px">Agregar nuevo usuario</div>
+          <label>Nombre</label>
+          <input id="nu-nombre" placeholder="Ej: María" />
+          <label>PIN (números)</label>
+          <input id="nu-pin" type="password" maxlength="8" placeholder="Ej: 1234" />
+          <label>Perfil</label>
+          <select id="nu-rol">
+            <option value="cocina">👨‍🍳 Cocina</option>
+            <option value="cocina_venta">🛒 Cocina Venta</option>
+            <option value="admin">👑 Administrador</option>
+          </select>
+          <button class="btn-primary" onclick="doAgregarUsuario()">+ Agregar usuario</button>
+        </div>
+      </div>
+    </div>
+
     <!-- GESTIÓN ADMIN -->
     <div id="view-admin" class="hidden">
       <div class="card">
@@ -251,7 +274,7 @@
 </div>
 
 <script>
-const API = "https://script.google.com/macros/s/AKfycbw5ZOEUp1AS94EfDZiaSj1MVnWFL8EIPzCEt-l4G9eWNeJGVxZUfMreALEzR0VleErj2g/exec";
+const API = "https://script.google.com/macros/s/AKfycbzd_P3Y8XGOP1VTTs94w-Pv6CODCy8wfllQvVdYLhOvJDAJEct0YeeuSghszkiIOkD_/exec";
 
 const USUARIOS = [
   { id:"admin",     nombre:"Administrador", pin:"4530", rol:"admin" },
@@ -335,7 +358,7 @@ async function init(){
 function renderLogin(){
   const list = el("user-list");
   list.innerHTML = "";
-  USUARIOS.forEach(u=>{
+  (typeof usuariosDinamicos!=="undefined" ? usuariosDinamicos : USUARIOS).forEach(u=>{
     const btn = document.createElement("button");
     btn.className = "user-btn"+(selUser?.id===u.id?" active":"");
     btn.innerHTML = `<div class="avatar" style="background:${rolBg(u.rol)}">${rolEmoji(u.rol)}</div>
@@ -349,8 +372,11 @@ el("pin-input").addEventListener("keydown", e=>{ if(e.key==="Enter") doLogin(); 
 
 function doLogin(){
   if(!selUser) return;
-  if(el("pin-input").value===selUser.pin){
-    usuario=selUser;
+  // Buscar usuario actualizado en lista dinámica
+  const uActual = (typeof usuariosDinamicos!=="undefined" ? usuariosDinamicos : USUARIOS).find(u=>u.id===selUser.id);
+  const pinCorrecto = uActual ? uActual.pin : selUser.pin;
+  if(el("pin-input").value===pinCorrecto){
+    usuario = uActual || selUser;
     tipoActual = usuario.rol==="cocina_venta" ? "uso" : "entrada";
     usoTipo = "unidad";
     hide("login"); hide("pin-error");
@@ -372,10 +398,11 @@ function renderApp(){
   el("header-name").textContent = usuario.nombre;
 
   const navItems = [
-    {key:"registrar",  label:"📝 Registrar"},
+    {key:"registrar",     label:"📝 Registrar"},
     ...(usuario.rol!=="cocina_venta"?[{key:"inventario",label:"📦 Inventario"}]:[]),
-    {key:"historial",  label:"📊 Historial"},
+    {key:"historial",     label:"📊 Historial"},
     ...(usuario.rol==="admin"?[{key:"admin",label:"⚙️ Gestión"}]:[]),
+    ...(usuario.rol==="admin"?[{key:"administracion",label:"👥 Administración"}]:[]),
   ];
   const nav = el("nav");
   nav.innerHTML="";
@@ -395,14 +422,15 @@ function renderApp(){
 }
 
 function setView(key){
-  ["registrar","inventario","historial","admin"].forEach(v=>{
+  ["registrar","inventario","historial","admin","administracion"].forEach(v=>{
     const e2=el("view-"+v); if(e2) e2.classList.add("hidden");
     const nb=el("nav-"+v);  if(nb) nb.classList.remove("active");
   });
   if(key==="inventario" && usuario?.rol==="cocina_venta"){ setView("registrar"); return; }
   show("view-"+key);
   const nb=el("nav-"+key); if(nb) nb.classList.add("active");
-  if(key==="registrar")  renderUltimos();
+  if(key==="registrar")       renderUltimos();
+  if(key==="administracion")  renderAdministracion();
   if(key==="inventario"){
     const grupos=[...new Set(insumos.map(i=>i.grupo||"Otros"))].sort();
     const sel=el("inv-grupo");
@@ -996,6 +1024,127 @@ async function doAgregarInsumo(){
   el("n-nombre").value=""; el("n-stock").value=""; el("n-precio").value="";
   el("n-categoria").value="ambos"; el("n-grupo").value=""; el("n-piezas").value="";
   populateInsumoSelects(); renderAdmin();
+}
+
+// ── GESTIÓN DE USUARIOS ──────────────────────────────────────────
+// Usuarios se guardan en localStorage para persistir entre sesiones
+const USUARIOS_KEY = "bodega:usuarios";
+
+function cargarUsuarios(){
+  try {
+    const saved = localStorage.getItem(USUARIOS_KEY);
+    if(saved){
+      const parsed = JSON.parse(saved);
+      if(parsed && parsed.length) return parsed;
+    }
+  } catch(e){}
+  return [...USUARIOS]; // fallback a los usuarios por defecto
+}
+
+function guardarUsuarios(lista){
+  try { localStorage.setItem(USUARIOS_KEY, JSON.stringify(lista)); } catch(e){}
+}
+
+// Reemplazar USUARIOS con versión dinámica
+let usuariosDinamicos = cargarUsuarios();
+
+// Override doLogin para usar usuarios dinámicos
+const _doLoginOriginal = doLogin;
+function doLogin(){
+  if(!selUser) return;
+  // Buscar en usuarios dinámicos
+  const u = usuariosDinamicos.find(u=>u.id===selUser.id);
+  if(u && el("pin-input").value===u.pin){
+    usuario=selUser;
+    tipoActual = usuario.rol==="cocina_venta" ? "uso" : "entrada";
+    usoTipo = "unidad";
+    hide("login"); hide("pin-error");
+    renderApp(); show("app"); setView("registrar");
+  } else { show("pin-error"); el("pin-input").value=""; }
+}
+
+function renderAdministracion(){
+  // Sincronizar con usuarios dinámicos
+  const div = el("usuarios-list");
+  div.innerHTML = usuariosDinamicos.map(u=>{
+    const esAdmin = u.rol==="admin";
+    return `<div style="padding:12px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:32px;height:32px;border-radius:50%;background:${rolBg(u.rol)};display:flex;align-items:center;justify-content:center;font-size:16px">${rolEmoji(u.rol)}</div>
+          <div>
+            <div style="font-weight:600">${u.nombre}</div>
+            <div style="font-size:12px;color:${rolColor(u.rol)}">${rolLabel(u.rol)}</div>
+          </div>
+        </div>
+        <div id="usr-btns-${u.id}">
+          ${esAdmin && u.id==="admin" ? "" : `<button class="btn-danger" onclick="confirmarBorrarUsuario('${u.id}')">Eliminar</button>`}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input id="usr-nombre-${u.id}" value="${u.nombre}" placeholder="Nombre"
+          style="flex:2;min-width:100px;margin-bottom:0;padding:6px 8px;font-size:13px" />
+        <input id="usr-pin-${u.id}" type="password" value="${u.pin}" placeholder="Nuevo PIN"
+          maxlength="8" style="width:90px;flex-shrink:0;margin-bottom:0;padding:6px 8px;font-size:13px;font-family:monospace;letter-spacing:4px" />
+        <select id="usr-rol-${u.id}" style="margin-bottom:0;padding:6px 8px;font-size:13px;flex:1;min-width:120px">
+          <option value="cocina"       ${u.rol==="cocina"      ?"selected":""}>👨‍🍳 Cocina</option>
+          <option value="cocina_venta" ${u.rol==="cocina_venta"?"selected":""}>🛒 Cocina Venta</option>
+          <option value="admin"        ${u.rol==="admin"       ?"selected":""}>👑 Admin</option>
+        </select>
+        <button class="btn-sm" style="color:var(--green);border-color:var(--green);margin-bottom:0;flex-shrink:0" onclick="guardarUsuario('${u.id}')">✓ Guardar</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function guardarUsuario(id){
+  const nombre = el("usr-nombre-"+id).value.trim();
+  const pin    = el("usr-pin-"+id).value.trim();
+  const rol    = el("usr-rol-"+id).value;
+  if(!nombre){ notify("El nombre no puede estar vacío",false); return; }
+  if(!pin || pin.length<4){ notify("El PIN debe tener al menos 4 dígitos",false); return; }
+  usuariosDinamicos = usuariosDinamicos.map(u=> u.id===id ? {...u, nombre, pin, rol} : u);
+  guardarUsuarios(usuariosDinamicos);
+  notify(`✓ Usuario "${nombre}" actualizado`);
+  renderAdministracion();
+  renderLogin(); // actualizar pantalla de login
+}
+
+function confirmarBorrarUsuario(id){
+  const u = usuariosDinamicos.find(u=>u.id===id);
+  if(!u) return;
+  el("usr-btns-"+id).innerHTML=`
+    <button class="btn-danger" onclick="borrarUsuario('${id}')">Confirmar</button>
+    <button class="btn-sm" onclick="renderAdministracion()" style="margin-left:6px">Cancelar</button>`;
+}
+
+function borrarUsuario(id){
+  if(id==="admin"){ notify("No puedes eliminar al administrador",false); return; }
+  const u = usuariosDinamicos.find(u=>u.id===id);
+  usuariosDinamicos = usuariosDinamicos.filter(u=>u.id!==id);
+  guardarUsuarios(usuariosDinamicos);
+  notify(`Usuario "${u?.nombre}" eliminado`);
+  renderAdministracion();
+  renderLogin();
+}
+
+function doAgregarUsuario(){
+  const nombre = el("nu-nombre").value.trim();
+  const pin    = el("nu-pin").value.trim();
+  const rol    = el("nu-rol").value;
+  if(!nombre){ notify("Escribe el nombre",false); return; }
+  if(!pin || pin.length<4){ notify("El PIN debe tener al menos 4 dígitos",false); return; }
+  if(usuariosDinamicos.some(u=>u.nombre.toLowerCase()===nombre.toLowerCase())){
+    notify(`Ya existe un usuario llamado "${nombre}"`,false); return;
+  }
+  const nuevoId = nombre.toLowerCase().replace(/\s+/g,"-")+"-"+Date.now();
+  const nuevo = {id:nuevoId, nombre, pin, rol};
+  usuariosDinamicos = [...usuariosDinamicos, nuevo];
+  guardarUsuarios(usuariosDinamicos);
+  notify(`✓ Usuario "${nombre}" creado`);
+  el("nu-nombre").value=""; el("nu-pin").value=""; el("nu-rol").value="cocina";
+  renderAdministracion();
+  renderLogin();
 }
 
 init();
