@@ -281,7 +281,7 @@
 </div>
 
 <script>
-const API = "https://script.google.com/macros/s/AKfycbwMLOqIbVDonTLKNnanHzAaKMDCD1bXos0k1Hb97rpKOtvPoZI80i7y_i9Adopc715NuA/exec";
+const API = "https://script.google.com/macros/s/AKfycbwMLOqIbVDonTLKNnanHzAaKMDCD1bXos0k1Hb97rpKOtvPoZI80i7y_i9Adopc715NuA/execc";
 
 const USUARIOS = [
   { id:"admin",     nombre:"Administrador", pin:"4530", rol:"admin" },
@@ -305,6 +305,26 @@ let tipoActual = "entrada";
 let usoTipo    = "unidad";
 let selUser    = null;
 let delConfirm = null;
+
+const PRODUCTOS_VENTA_ENTRADA = [
+  "PAN TRADICIONAL","PAN MAC",
+  "COCA COLA 500ML DESECHABLE","COCA COLA REGULAR 12OZ","COCA COLA SIN AZUCAR 500ML",
+  "AGUA DE JAMAICA","AGUA MINERAL 500ML","AGUA NATURAL 500ML"
+];
+
+function hoy(){ return new Date().toLocaleDateString("es-ES"); }
+
+function yaIngresadoHoy(insumoNombre){
+  return movs.some(m=>
+    m.tipo==="entrada" && m.rol==="cocina_venta" &&
+    m.insumoNombre.toUpperCase()===insumoNombre.toUpperCase() &&
+    m.fecha===hoy()
+  );
+}
+
+function esProductoVentaPermitido(nombre){
+  return PRODUCTOS_VENTA_ENTRADA.some(p=>p.toUpperCase()===nombre.toUpperCase());
+}
 
 const fmtDate  = d => new Date(d).toLocaleDateString("es-ES");
 const fmtTime  = d => new Date(d).toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"});
@@ -393,7 +413,7 @@ function doLogin(){
   const pinCorrecto = uActual ? uActual.pin : selUser.pin;
   if(el("pin-input").value===pinCorrecto){
     usuario = uActual || selUser;
-    tipoActual = usuario.rol==="cocina_venta" ? "uso" : "entrada";
+    tipoActual = "entrada"; // todos empiezan en entrada
     usoTipo = "unidad";
     hide("login"); hide("pin-error");
     renderApp(); show("app"); setView("registrar");
@@ -415,7 +435,7 @@ function renderApp(){
 
   const navItems = [
     {key:"registrar",     label:"📝 Registrar"},
-    ...(usuario.rol!=="cocina_venta"?[{key:"inventario",label:"📦 Inventario"}]:[]),
+    {key:"inventario",    label:"📦 Inventario"},
     {key:"historial",     label:"📊 Historial"},
     ...(usuario.rol==="admin"?[{key:"admin",label:"⚙️ Gestión"}]:[]),
     ...(usuario.rol==="admin"?[{key:"administracion",label:"👥 Administración"}]:[]),
@@ -430,7 +450,8 @@ function renderApp(){
   });
 
   usuario.rol==="admin" ? show("btn-excel") : hide("btn-excel");
-  const puedeEntrada = usuario.rol==="admin"||usuario.rol==="cocina";
+  // cocina_venta puede hacer entrada (solo para sus 8 productos)
+  const puedeEntrada = usuario.rol==="admin"||usuario.rol==="cocina"||usuario.rol==="cocina_venta";
   if(puedeEntrada){ show("type-row"); hide("tipo-venta-label"); show("costo-section"); }
   else { hide("type-row"); show("tipo-venta-label"); hide("costo-section"); }
   setTipo(tipoActual);
@@ -442,13 +463,16 @@ function setView(key){
     const e2=el("view-"+v); if(e2) e2.classList.add("hidden");
     const nb=el("nav-"+v);  if(nb) nb.classList.remove("active");
   });
-  if(key==="inventario" && usuario?.rol==="cocina_venta"){ setView("registrar"); return; }
+  // cocina_venta puede ver inventario (solo sus productos)
   show("view-"+key);
   const nb=el("nav-"+key); if(nb) nb.classList.add("active");
   if(key==="registrar")       renderUltimos();
   if(key==="administracion")  renderAdministracion();
   if(key==="inventario"){
-    const grupos=[...new Set(insumos.map(i=>i.grupo||"Otros"))].sort();
+    const baseGrupos = usuario?.rol==="cocina_venta"
+      ? insumos.filter(i=>{ const cat=i.categoria||"ambos"; return cat==="venta"||cat==="ambos"; })
+      : insumos;
+    const grupos=[...new Set(baseGrupos.map(i=>i.grupo||"Otros"))].sort();
     const sel=el("inv-grupo");
     sel.innerHTML='<option value="">Todos los grupos</option>'+grupos.map(g=>`<option value="${g}">${g}</option>`).join("");
     sel.value="";
@@ -461,7 +485,7 @@ function setView(key){
 function setTipo(t){
   tipoActual=t;
   el("type-row").querySelectorAll(".type-btn").forEach(b=>{ b.classList.remove("active"); if(b.classList.contains(t)) b.classList.add("active"); });
-  const puedeEntrada = usuario.rol==="admin"||usuario.rol==="cocina";
+  const puedeEntrada = usuario.rol==="admin"||usuario.rol==="cocina"||usuario.rol==="cocina_venta";
   if(puedeEntrada){ t==="entrada" ? show("costo-section") : hide("costo-section"); }
   el("f-nota").placeholder = t==="entrada"?"Ej: SAMS CLUB, proveedor ABC":"Ej: Para sopa del almuerzo";
   const btn = document.querySelector("#view-registrar .btn-primary");
@@ -497,11 +521,14 @@ function filtrarInsumos(){
   const q=el("f-buscar").value.trim().toLowerCase();
   const list=el("f-insumo-list");
   const mostrarStock=usuario?.rol!=="cocina_venta";
-  // Para entrada: cocina ve todos los insumos (puede meter cualquiera a bodega)
-  // Para uso: aplica filtro de área
-  const base = (tipoActual==="entrada" && usuario?.rol!=="cocina_venta")
-    ? insumos
-    : getInsumosParaArea();
+  let base;
+  if(tipoActual==="entrada" && usuario?.rol==="cocina_venta"){
+    base = insumos.filter(i=>esProductoVentaPermitido(i.nombre));
+  } else if(tipoActual==="entrada"){
+    base = insumos;
+  } else {
+    base = getInsumosParaArea();
+  }
   const filtrados=base.filter(i=>!q||i.nombre.toLowerCase().includes(q));
   if(!filtrados.length){
     list.innerHTML=`<div style="padding:12px;color:var(--muted);text-align:center;font-size:13px">Sin resultados</div>`;
@@ -510,11 +537,15 @@ function filtrarInsumos(){
   list.innerHTML=filtrados.map(i=>{
     const si=stockInfo(i);
     const ppu=parseInt(i.piezasPorUnidad)||0;
-    const stockTxt = ppu>0 ? si.texto : `${i.stock} ${i.unidad}`;
-    return `<div onclick="seleccionarInsumo(${i.id})"
-      style="padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"
-      onmouseover="this.style.background='var(--hi)'" onmouseout="this.style.background=''">
-      <span style="font-weight:600">${i.nombre}</span>
+    const stockTxt=ppu>0?si.texto:`${i.stock} ${i.unidad}`;
+    const bloqueado=usuario?.rol==="cocina_venta"&&tipoActual==="entrada"&&yaIngresadoHoy(i.nombre);
+    return `<div onclick="${bloqueado?`notify('${i.nombre} ya fue ingresado hoy',false)`:`seleccionarInsumo(${i.id})`}"
+      style="padding:11px 14px;cursor:${bloqueado?'not-allowed':'pointer'};border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;opacity:${bloqueado?'0.5':'1'}"
+      onmouseover="this.style.background='${bloqueado?'':'var(--hi)'}'" onmouseout="this.style.background=''">
+      <div>
+        <span style="font-weight:600">${i.nombre}</span>
+        ${bloqueado?`<div style="font-size:11px;color:var(--orange);margin-top:2px">✓ Ya ingresado hoy — disponible mañana</div>`:""}
+      </div>
       ${mostrarStock?`<span style="font-size:12px;color:${i.stock<1?'var(--red)':'var(--muted)'}">${stockTxt}${i.stock<1?' ⚠':''}</span>`:`<span style="font-size:12px;color:var(--muted)">${i.unidad}</span>`}
     </div>`;
   }).join("");
@@ -653,6 +684,11 @@ async function doRegistrar(){
 
   if(!id||!cantInput||cantInput<=0){ notify("Completa insumo y cantidad",false); return; }
   const ins=insumos.find(i=>i.id===id);
+  // Bloquear si cocina_venta ya ingresó este producto hoy
+  if(tipoActual==="entrada" && usuario?.rol==="cocina_venta" && yaIngresadoHoy(ins.nombre)){
+    notify(`${ins.nombre} ya fue ingresado hoy. Disponible mañana.`,false);
+    return;
+  }
   const ppu=parseInt(ins.piezasPorUnidad)||0;
 
   // Stock en UNIDADES. Si uso por pieza, convertir a unidades
@@ -758,7 +794,11 @@ function renderInventario(){
   const filtroG=el("inv-grupo")?el("inv-grupo").value:"";
   if(!insumos.length){ div.innerHTML=`<div style="color:var(--muted);text-align:center;padding:20px 0">No hay insumos</div>`; return; }
 
-  const lista=filtroG?insumos.filter(i=>(i.grupo||"Otros")===filtroG):insumos;
+  // cocina_venta ve todos los productos de categoría venta/ambos
+  const baseInv = usuario?.rol==="cocina_venta"
+    ? insumos.filter(i=>{ const cat=i.categoria||"ambos"; return cat==="venta"||cat==="ambos"; })
+    : insumos;
+  const lista=filtroG?baseInv.filter(i=>(i.grupo||"Otros")===filtroG):baseInv;
   const porGrupo={};
   lista.forEach(i=>{ const g=i.grupo||"Otros"; if(!porGrupo[g]) porGrupo[g]=[]; porGrupo[g].push(i); });
 
@@ -798,6 +838,7 @@ function renderInventario(){
           ${ppu>0?`<div style="font-size:11px;color:var(--muted)">${si.totalPiezas} pzas total</div>`:""}
           ${verPrecio&&i.precio?`<div style="font-size:12px;color:var(--muted)">Precio: ${fmtMoney(i.precio)}/${i.unidad}</div>`:""}
           ${verPrecio&&i.precio&&i.stock?`<div style="font-size:12px;color:var(--blue)">Valor: ${fmtMoney(i.precio*i.stock)}</div>`:""}
+          ${usuario?.rol==="cocina_venta"&&yaIngresadoHoy(i.nombre)?`<div style="font-size:11px;color:var(--orange)">✓ Ya ingresado hoy</div>`:usuario?.rol==="cocina_venta"?`<div style="font-size:11px;color:var(--green)">Disponible para ingresar</div>`:""}
         </div>
         <div style="text-align:right">
           ${ppu>0
@@ -1064,7 +1105,7 @@ function doLogin(){
   const u = usuariosDinamicos.find(u=>u.id===selUser.id);
   if(u && el("pin-input").value===u.pin){
     usuario=selUser;
-    tipoActual = usuario.rol==="cocina_venta" ? "uso" : "entrada";
+    tipoActual = "entrada"; // todos empiezan en entrada
     usoTipo = "unidad";
     hide("login"); hide("pin-error");
     renderApp(); show("app"); setView("registrar");
