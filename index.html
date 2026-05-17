@@ -435,7 +435,7 @@ function renderApp(){
 
   const navItems = [
     {key:"registrar",     label:"📝 Registrar"},
-    {key:"inventario",    label:"📦 Inventario"},
+    ...(usuario.rol!=="cocina_venta"?[{key:"inventario",label:"📦 Inventario"}]:[]),
     {key:"historial",     label:"📊 Historial"},
     ...(usuario.rol==="admin"?[{key:"admin",label:"⚙️ Gestión"}]:[]),
     ...(usuario.rol==="admin"?[{key:"administracion",label:"👥 Administración"}]:[]),
@@ -552,7 +552,7 @@ function filtrarInsumos(){
         <span style="font-weight:600">${i.nombre}</span>
         ${bloqueado?`<div style="font-size:11px;color:var(--orange);margin-top:2px">✓ Ya ingresado hoy — disponible mañana</div>`:""}
       </div>
-      ${mostrarStock?`<span style="font-size:12px;color:${i.stock<1?'var(--red)':'var(--muted)'}">${stockTxt}${i.stock<1?' ⚠':''}</span>`:`<span style="font-size:12px;color:var(--muted)">${i.unidad}</span>`}
+      <span style="font-size:12px;color:${i.stock<1?'var(--red)':'var(--muted)'}">${stockTxt}${i.stock<1?' ⚠':''}</span>
     </div>`;
   }).join("");
   list.style.display="block";
