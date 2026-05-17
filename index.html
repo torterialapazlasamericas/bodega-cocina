@@ -472,7 +472,13 @@ function setView(key){
     const baseGrupos = usuario?.rol==="cocina_venta"
       ? insumos.filter(i=>{ const cat=i.categoria||"ambos"; return cat==="venta"||cat==="ambos"; })
       : insumos;
-    const grupos=[...new Set(baseGrupos.map(i=>i.grupo||"Otros"))].sort();
+    // cocina_venta solo puede ver BEBIDAS VENTAS y CARNES VENTAS
+    const gruposPermitidos = usuario?.rol==="cocina_venta"
+      ? ["BEBIDAS VENTAS","CARNES VENTAS"]
+      : null;
+    const grupos=[...new Set(baseGrupos.map(i=>i.grupo||"Otros"))]
+      .filter(g=> gruposPermitidos ? gruposPermitidos.includes(g.toUpperCase()) : true)
+      .sort();
     const sel=el("inv-grupo");
     sel.innerHTML='<option value="">Todos los grupos</option>'+grupos.map(g=>`<option value="${g}">${g}</option>`).join("");
     sel.value="";
@@ -794,9 +800,14 @@ function renderInventario(){
   const filtroG=el("inv-grupo")?el("inv-grupo").value:"";
   if(!insumos.length){ div.innerHTML=`<div style="color:var(--muted);text-align:center;padding:20px 0">No hay insumos</div>`; return; }
 
-  // cocina_venta ve todos los productos de categoría venta/ambos
+  // cocina_venta solo ve productos de BEBIDAS VENTAS y CARNES VENTAS
+  const GRUPOS_VENTA = ["BEBIDAS VENTAS","CARNES VENTAS"];
   const baseInv = usuario?.rol==="cocina_venta"
-    ? insumos.filter(i=>{ const cat=i.categoria||"ambos"; return cat==="venta"||cat==="ambos"; })
+    ? insumos.filter(i=>{
+        const cat=i.categoria||"ambos";
+        const grp=(i.grupo||"").toUpperCase();
+        return (cat==="venta"||cat==="ambos") && GRUPOS_VENTA.includes(grp);
+      })
     : insumos;
   const lista=filtroG?baseInv.filter(i=>(i.grupo||"Otros")===filtroG):baseInv;
   const porGrupo={};
