@@ -66,6 +66,10 @@
     .resumen-card { flex:1; background:var(--hi); border-radius:10px; padding:10px 12px; text-align:center; }
     .resumen-num { font-size:20px; font-weight:800; }
     .resumen-lbl { font-size:11px; color:var(--muted); }
+    /* Prevenir scroll en inputs numéricos */
+    input[type=number] { -moz-appearance: textfield; }
+    input[type=number]::-webkit-outer-spin-button,
+    input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
   </style>
 </head>
 <body>
@@ -141,11 +145,13 @@
         </div>
         <div id="uso-info" style="display:none;font-size:12px;color:var(--orange);margin-bottom:10px;padding:8px 12px;background:#7c2d1222;border-radius:8px;border-left:3px solid var(--orange)"></div>
         <label id="f-cant-label">Cantidad</label>
-        <input id="f-cant" type="number" min="0.01" step="0.01" placeholder="Ej: 5" oninput="onCantChange()" />
+        <input id="f-cant" type="number" min="0.01" step="0.01" placeholder="Ej: 5" oninput="onCantChange()"
+          onwheel="this.blur()" onkeydown="if(event.key==='ArrowDown'&&!event.shiftKey){event.preventDefault();el('f-costo').focus();}" />
         <div id="f-cant-equiv" style="display:none;font-size:12px;color:var(--muted);margin-top:-10px;margin-bottom:13px;padding:6px 10px;background:var(--hi);border-radius:6px"></div>
         <div id="costo-section">
           <label>Precio por unidad (opcional, $) <span style="color:var(--muted);font-weight:400;text-transform:none">— actualiza el precio del insumo</span></label>
-          <input id="f-costo" type="number" min="0" step="0.01" placeholder="Ej: 170.00" />
+          <input id="f-costo" type="number" min="0" step="0.01" placeholder="Ej: 170.00"
+            onwheel="this.blur()" onkeydown="if(event.key==='ArrowDown'){event.preventDefault();el('f-nota').focus();}" />
         </div>
         <label>Nota / Proveedor (opcional)</label>
         <input id="f-nota" type="text" placeholder="Ej: SAMS CLUB" />
@@ -246,11 +252,11 @@
           </div>
           <div>
             <label>Stock inicial</label>
-            <input id="n-stock" type="number" min="0" placeholder="0" />
+            <input id="n-stock" type="number" min="0" placeholder="0" onwheel="this.blur()" />
           </div>
         </div>
         <label>Precio unitario ($)</label>
-        <input id="n-precio" type="number" min="0" step="0.01" placeholder="Ej: 45.00" />
+        <input id="n-precio" type="number" min="0" step="0.01" placeholder="Ej: 45.00" onwheel="this.blur()" />
         <label>Área de uso</label>
         <select id="n-categoria">
           <option value="ambos">🔀 Ambos (Cocina y Venta)</option>
@@ -261,7 +267,7 @@
         <input id="n-grupo" placeholder="Ej: Carnes, Bebidas, Desechables..." list="grupos-list" />
         <datalist id="grupos-list"></datalist>
         <label>Piezas por unidad <span style="color:var(--muted);font-weight:400;text-transform:none">(si viene en caja/paquete con piezas adentro, si no deja en 0)</span></label>
-        <input id="n-piezas" type="number" min="0" step="1" placeholder="0" />
+        <input id="n-piezas" type="number" min="0" step="1" placeholder="0" onwheel="this.blur()" />
         <button class="btn-primary" onclick="doAgregarInsumo()">+ Agregar insumo</button>
       </div>
       <div class="card">
