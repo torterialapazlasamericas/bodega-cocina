@@ -194,9 +194,10 @@
           </div>
         </div>
         <div class="row2">
-          <div><label>Desde</label><input id="h-desde" type="date" oninput="renderHistorial()" style="margin-bottom:10px" /></div>
-          <div><label>Hasta</label><input id="h-hasta" type="date" oninput="renderHistorial()" style="margin-bottom:10px" /></div>
+          <div><label>Desde</label><input id="h-desde" type="date" style="margin-bottom:10px" /></div>
+          <div><label>Hasta</label><input id="h-hasta" type="date" style="margin-bottom:10px" /></div>
         </div>
+        <button class="btn-primary" style="width:100%;margin-bottom:14px" onclick="renderHistorial()">🔍 Buscar</button>
         <div id="h-resumen" class="hidden resumen"></div>
         <div id="h-list"></div>
       </div>
@@ -875,13 +876,20 @@ function renderInventario(){
 function getMovFiltrados(){
   const hInsumo=el("h-insumo").value, hTipo=el("h-tipo").value;
   const hDesde=el("h-desde").value,   hHasta=el("h-hasta").value;
+  // Convertir m.fecha "DD/MM/YYYY" a "YYYY-MM-DD" para comparar con inputs de tipo date
+  const parseFecha = f => {
+    if(!f) return "";
+    const p = f.split("/");
+    return p.length===3 ? `${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}` : "";
+  };
   return movs.filter(m=>{
     // No admin: solo ver sus propios movimientos
     if(usuario.rol!=="admin" && m.usuario!==usuario.nombre) return false;
     if(hInsumo && String(m.insumoId)!==hInsumo) return false;
     if(hTipo   && m.tipo!==hTipo) return false;
-    if(hDesde  && new Date(m.timestamp)<new Date(hDesde)) return false;
-    if(hHasta){ const h=new Date(hHasta); h.setHours(23,59,59); if(new Date(m.timestamp)>h) return false; }
+    const mFecha = parseFecha(m.fecha);
+    if(hDesde  && mFecha && mFecha < hDesde) return false;
+    if(hHasta  && mFecha && mFecha > hHasta) return false;
     return true;
   });
 }
